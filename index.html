@@ -25,54 +25,80 @@
             </div>
 
             <div class="sidebar-content">
-                <!-- Section 1: Typography -->
+                <!-- Section 1: Content & Typography -->
                 <div class="control-section">
                     <h2 class="section-title">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-                        Typography
+                        Content &amp; Typography
                         <svg class="chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     </h2>
                     <div class="section-body">
                     <div class="control-card">
                         <div class="control-group">
-                            <label for="textInput">Mosaic Text (Multi-line)</label>
-                            <textarea id="textInput" rows="3" placeholder="Type letters...">AMERICAN
-ENCAUSTIC
-TILING CO.</textarea>
-                        </div>
-                        
-                        <div class="control-group">
-                            <label for="textFont">Font Face</label>
-                            <select id="textFont">
-                                <option value="Arial, sans-serif" selected>Arial (Bold Sans)</option>
-                                <option value="'Times New Roman', serif">Times New Roman (Classic Serif)</option>
-                                <option value="'Cinzel', serif">Cinzel (Roman Serif)</option>
-                                <option value="'Shrikhand', display">Shrikhand (Retro Bold)</option>
-                                <option value="'Space Mono', monospace">Space Mono (Tech Slab)</option>
-                                <option value="'Montserrat', sans-serif">Montserrat (Modern Grotesk)</option>
-                                <option value="'Playfair Display', serif">Playfair Display (Classy Serif)</option>
-                                <option value="'Outfit', sans-serif">Outfit (Clean Geometric)</option>
+                            <label for="contentType">Content Source</label>
+                            <select id="contentType">
+                                <option value="text" selected>🔤 Typography Text</option>
+                                <option value="logo">🖼 Custom Logo (PNG/SVG)</option>
                             </select>
                         </div>
 
-                        <div class="control-group">
-                            <label for="fontScale">Font Size <span class="numeric-display" id="val-fontScale">100%</span></label>
-                            <input type="range" id="fontScale" min="30" max="250" value="100" aria-valuenow="100" aria-valuemin="30" aria-valuemax="250">
-                        </div>
+                        <!-- Typography-only Controls -->
+                        <div id="typographyControls">
+                            <div class="control-group">
+                                <label for="textInput">Mosaic Text (Multi-line)</label>
+                                <textarea id="textInput" rows="3" placeholder="Type letters...">AMERICAN
+ENCAUSTIC
+TILING CO.</textarea>
+                            </div>
+                            
+                            <div class="control-group">
+                                <label for="textFont">Font Face</label>
+                                <select id="textFont">
+                                    <option value="Arial, sans-serif" selected>Arial (Bold Sans)</option>
+                                    <option value="'Times New Roman', serif">Times New Roman (Classic Serif)</option>
+                                    <option value="'Cinzel', serif">Cinzel (Roman Serif)</option>
+                                    <option value="'Shrikhand', display">Shrikhand (Retro Bold)</option>
+                                    <option value="'Space Mono', monospace">Space Mono (Tech Slab)</option>
+                                    <option value="'Montserrat', sans-serif">Montserrat (Modern Grotesk)</option>
+                                    <option value="'Playfair Display', serif">Playfair Display (Classy Serif)</option>
+                                    <option value="'Outfit', sans-serif">Outfit (Clean Geometric)</option>
+                                </select>
+                            </div>
 
-                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="fontScale">Font Size <span class="numeric-display" id="val-fontScale">100%</span></label>
+                                <input type="range" id="fontScale" min="30" max="250" value="100" aria-valuenow="100" aria-valuemin="30" aria-valuemax="250">
+                            </div>
+
                             <div class="control-group">
                                 <label for="letterSpacing">Spacing <span class="numeric-display" id="val-letterSpacing">0px</span></label>
                                 <input type="range" id="letterSpacing" min="-20" max="40" value="0" aria-valuenow="0" aria-valuemin="-20" aria-valuemax="40">
                             </div>
+                        </div>
+
+                        <!-- Logo-only Controls -->
+                        <div id="logoControls" style="display: none;">
                             <div class="control-group">
-                                <label for="textRotation">Rotation <span class="numeric-display" id="val-textRotation">0°</span></label>
-                                <input type="range" id="textRotation" min="-45" max="45" value="0" aria-valuenow="0" aria-valuemin="-45" aria-valuemax="45">
+                                <label for="logoInput">Upload PNG or SVG Logo</label>
+                                <input type="file" id="logoInput" accept="image/png, image/svg+xml, image/jpeg" style="display: none;">
+                                <button class="btn btn-secondary" type="button" onclick="document.getElementById('logoInput').click()" style="width: 100%; justify-content: center;">📁 Select Logo File</button>
+                                <span id="logoFileName" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-style: italic;">No file selected (using default)</span>
+                            </div>
+
+                            <div class="control-group">
+                                <label for="logoScale">Logo Scale <span class="numeric-display" id="val-logoScale">100%</span></label>
+                                <input type="range" id="logoScale" min="10" max="300" value="100" aria-valuenow="100" aria-valuemin="10" aria-valuemax="300">
                             </div>
                         </div>
 
+                        <!-- Shared Controls -->
+                        <div class="control-group">
+                            <label for="textRotation">Rotation <span class="numeric-display" id="val-textRotation">0°</span></label>
+                            <input type="range" id="textRotation" min="-45" max="45" value="0" aria-valuenow="0" aria-valuemin="-45" aria-valuemax="45">
+                        </div>
+
                         <div class="switch-group" style="margin-top: 15px;">
-                            <label for="showText">Show Mosaic Text</label>
+                            <label for="showText">Show Content</label>
                             <label class="switch">
                                 <input type="checkbox" id="showText" checked>
                                 <span class="slider"></span>

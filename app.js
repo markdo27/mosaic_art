@@ -39,6 +39,27 @@ const subwayBorderColorPicker = document.getElementById('subwayBorderColor');
 const subwayHeaderColorPicker = document.getElementById('subwayHeaderColor');
 const showTextCheckbox = document.getElementById('showText');
 
+// Logo mode controls and state variables
+const contentTypeSelect = document.getElementById('contentType');
+const typographyControls = document.getElementById('typographyControls');
+const logoControls = document.getElementById('logoControls');
+const logoInput = document.getElementById('logoInput');
+const logoScaleInput = document.getElementById('logoScale');
+const logoFileNameSpan = document.getElementById('logoFileName');
+
+let loadedLogoImage = null;
+let logoMaskRed = null;
+let logoMaskGreen = null;
+let logoMaskBlue = null;
+
+const defaultLogoSVG = `
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <path d="M50,5 L95,50 L50,95 L5,50 Z" fill="#000" />
+  <path d="M50,22 L78,50 L50,78 L22,50 Z" fill="#fff" />
+  <circle cx="50" cy="50" r="10" fill="#000" />
+</svg>
+`.trim();
+
 const canvas = document.getElementById('mosaicCanvas');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
 const hiddenCanvas = document.createElement('canvas');
@@ -78,6 +99,24 @@ function showToast(message) {
     toastNotification.textContent = message;
     toastNotification.classList.add('show');
     setTimeout(() => { toastNotification.classList.remove('show'); }, 3000);
+}
+
+function createColorMask(img, color) {
+    const mCanvas = document.createElement('canvas');
+    mCanvas.width = img.width;
+    mCanvas.height = img.height;
+    const mCtx = mCanvas.getContext('2d');
+    mCtx.drawImage(img, 0, 0);
+    mCtx.globalCompositeOperation = 'source-in';
+    mCtx.fillStyle = color;
+    mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height);
+    return mCanvas;
+}
+
+function createLogoMasks(img) {
+    logoMaskRed = createColorMask(img, 'rgb(255, 0, 0)');
+    logoMaskGreen = createColorMask(img, 'rgb(0, 255, 0)');
+    logoMaskBlue = createColorMask(img, 'rgb(0, 0, 255)');
 }
 
 // Convert Hex to HSL
@@ -470,6 +509,9 @@ function renderMosaic() {
     const hasBorder = borderPattern !== 'none';
     const showText = showTextCheckbox.checked;
 
+    const contentType = contentTypeSelect.value;
+    const logoScale = parseFloat(logoScaleInput.value) / 100;
+
     const is3DMode = (style === 'beveled');
     if (is3DMode) { shadowGroup.classList.remove('disabled'); highlightGroup.classList.remove('disabled'); }
     else { shadowGroup.classList.add('disabled'); highlightGroup.classList.add('disabled'); }
@@ -486,11 +528,16 @@ function renderMosaic() {
     const lines = wrapText(hiddenCtx, text, canvasWidth - padding);
     const totalTextHeight = lines.length * lineHeight;
 
+    let contentHeight = totalTextHeight;
+    if (contentType === 'logo' && loadedLogoImage) {
+        contentHeight = loadedLogoImage.height * logoScale;
+    }
+
     // Responsive border rows
     const borderRows = hasBorder ? Math.max(4, Math.min(14, Math.round(canvasWidth / tileSize * 0.1))) : 0;
     const borderHeight = borderRows * tileSize;
     const layoutPadding = hasBorder ? (borderHeight * 2 + tileSize * 4) : (padding * 2);
-    const requiredCanvasHeight = autoHeight ? Math.max(350, totalTextHeight + layoutPadding) : canvasHeight;
+    const requiredCanvasHeight = autoHeight ? Math.max(350, contentHeight + layoutPadding) : canvasHeight;
 
     if (canvas.width !== canvasWidth || canvas.height !== requiredCanvasHeight) {
         canvas.width = canvasWidth; canvas.height = requiredCanvasHeight;
@@ -506,18 +553,41 @@ function renderMosaic() {
     const centerY = (requiredCanvasHeight / 2) + textY;
 
     if (showText) {
-        hiddenCtx.font = fontString; hiddenCtx.textBaseline = 'middle'; hiddenCtx.textAlign = 'center';
-        let startY = (requiredCanvasHeight - totalTextHeight) / 2 + (lineHeight / 2) + textY;
-        lines.forEach((line, index) => {
-            const currentY = startY + (index * lineHeight);
+        if (contentType === 'logo' && loadedLogoImage) {
+            const lw = loadedLogoImage.width * logoScale;
+            const lh = loadedLogoImage.height * logoScale;
+            const drawMask = (maskCanvas, xOffset, yOffset) => {
+                if (!maskCanvas) return;
+                hiddenCtx.save();
+                hiddenCtx.translate(centerX + xOffset, centerY + yOffset);
+                hiddenCtx.rotate(textRotation * Math.PI / 180);
+                hiddenCtx.drawImage(maskCanvas, -lw / 2, -lh / 2, lw, lh);
+                hiddenCtx.restore();
+            };
+
             if (is3DMode) {
-                hiddenCtx.fillStyle = 'rgb(0, 0, 255)'; drawTextLineOrSpaced(hiddenCtx, line, centerX - 3, currentY - 3, letterSpacing, textRotation);
-                hiddenCtx.fillStyle = 'rgb(0, 255, 0)'; for (let i = 1; i <= 8; i++) drawTextLineOrSpaced(hiddenCtx, line, centerX - (i * 1.5), currentY + (i * 1.5), letterSpacing, textRotation);
-                hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+                drawMask(logoMaskBlue, -3, -3);
+                for (let i = 1; i <= 8; i++) {
+                    drawMask(logoMaskGreen, -i * 1.5, i * 1.5);
+                }
+                drawMask(logoMaskRed, 0, 0);
             } else {
-                hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+                drawMask(logoMaskRed, 0, 0);
             }
-        });
+        } else {
+            hiddenCtx.font = fontString; hiddenCtx.textBaseline = 'middle'; hiddenCtx.textAlign = 'center';
+            let startY = (requiredCanvasHeight - totalTextHeight) / 2 + (lineHeight / 2) + textY;
+            lines.forEach((line, index) => {
+                const currentY = startY + (index * lineHeight);
+                if (is3DMode) {
+                    hiddenCtx.fillStyle = 'rgb(0, 0, 255)'; drawTextLineOrSpaced(hiddenCtx, line, centerX - 3, currentY - 3, letterSpacing, textRotation);
+                    hiddenCtx.fillStyle = 'rgb(0, 255, 0)'; for (let i = 1; i <= 8; i++) drawTextLineOrSpaced(hiddenCtx, line, centerX - (i * 1.5), currentY + (i * 1.5), letterSpacing, textRotation);
+                    hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+                } else {
+                    hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+                }
+            });
+        }
     }
 
     const imageData = hiddenCtx.getImageData(0, 0, canvasWidth, requiredCanvasHeight);
@@ -526,7 +596,7 @@ function renderMosaic() {
     ctx.fillRect(0, 0, canvasWidth, requiredCanvasHeight);
 
     if (hasBorder) {
-        const textBandHeight = Math.max(tileSize * 8, totalTextHeight + 40);
+        const textBandHeight = Math.max(tileSize * 8, contentHeight + 40);
         const textBandYStart = centerY - textBandHeight / 2;
         const textBandYEnd = centerY + textBandHeight / 2;
         const TopBorderYStart = textBandYStart - borderHeight;
@@ -610,6 +680,13 @@ function generateSVGString() {
     const weight = (fontFace.includes('Times New Roman')||fontFace.includes('Times')) ? 'bold' : '900';
     hiddenCtx.font = `${weight} ${baseFontSize}px ${fontFace}`;
     const lines = wrapText(hiddenCtx, text, canvasWidth - 60), totalTextHeight = lines.length*lineHeight;
+    const contentType = contentTypeSelect.value;
+    const logoScale = parseFloat(logoScaleInput.value) / 100;
+    let contentHeight = totalTextHeight;
+    if (contentType === 'logo' && loadedLogoImage) {
+        contentHeight = loadedLogoImage.height * logoScale;
+    }
+
     const is3DMode = (style === 'beveled'), borderPattern = borderPatternSelect.value, hasBorder = borderPattern !== 'none';
     const borderRows = hasBorder ? Math.max(4, Math.min(14, Math.round(canvasWidth/tileSize*0.1))) : 0;
     const borderHeight = borderRows*tileSize;
@@ -627,7 +704,7 @@ function generateSVGString() {
     };
 
     if (hasBorder) {
-        const tbH = Math.max(tileSize*8, totalTextHeight+40), tbYs = centerY-tbH/2, tbYe = centerY+tbH/2;
+        const tbH = Math.max(tileSize*8, contentHeight+40), tbYs = centerY-tbH/2, tbYe = centerY+tbH/2;
         const topYs = tbYs-borderHeight, botYe = tbYe+borderHeight;
         const fts = Math.round(tileSize*2.5);
         let fr = 0;
@@ -650,18 +727,24 @@ function exportPNG() {
     const scale = parseInt(exportScaleSelect.value);
     const ow = canvas.width, oh = canvas.height;
     const ots=parseInt(tileSizeInput.value),ogs=parseFloat(groutSizeInput.value),obd=parseFloat(bevelDepthInput.value),ofs=parseFloat(fontScaleInput.value),ols=parseInt(letterSpacingInput.value);
+    const ols_logo = parseFloat(logoScaleInput.value);
     // Temporarily raise slider max to accommodate scaled values
     const origMaxW = canvasWidthInput.max, origMaxH = canvasHeightInput.max;
     canvasWidthInput.max = 20000; canvasHeightInput.max = 20000;
     tileSizeInput.value=ots*scale;groutSizeInput.value=ogs*scale;bevelDepthInput.value=obd*scale;fontScaleInput.value=ofs*scale;letterSpacingInput.value=ols*scale;canvasWidthInput.value=ow*scale;canvasHeightInput.value=oh*scale;
+    logoScaleInput.value=ols_logo*scale;
     const otx=textX,oty=textY;textX*=scale;textY*=scale;
     renderMosaic();
     const dataURL = canvas.toDataURL('image/png');
-    tileSizeInput.value=ots;groutSizeInput.value=ogs;bevelDepthInput.value=obd;fontScaleInput.value=ofs;letterSpacingInput.value=ols;canvasWidthInput.value=ow;canvasHeightInput.value=oh;textX=otx;textY=oty;
+    tileSizeInput.value=ots;groutSizeInput.value=ogs;bevelDepthInput.value=obd;fontScaleInput.value=ofs;letterSpacingInput.value=ols;canvasWidthInput.value=ow;canvasHeightInput.value=oh;
+    logoScaleInput.value=ols_logo;
+    textX=otx;textY=oty;
     canvasWidthInput.max = origMaxW; canvasHeightInput.max = origMaxH;
     renderMosaic();
     const link = document.createElement('a');
-    link.download = `mosaic_${textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${scale}x.png`;
+    const isLogo = (contentTypeSelect.value === 'logo');
+    const baseName = isLogo ? 'logo' : (textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'empty');
+    link.download = `mosaic_${baseName}_${scale}x.png`;
     link.href = dataURL; link.click();
     showToast(`High-res PNG (${scale}x) exported!`);
 }
@@ -671,7 +754,9 @@ function exportSVG() {
     const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = `mosaic_${textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_')}.svg`;
+    const isLogo = (contentTypeSelect.value === 'logo');
+    const baseName = isLogo ? 'logo' : (textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'empty');
+    link.download = `mosaic_${baseName}.svg`;
     link.href = url; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 100);
     showToast("SVG Vector exported successfully!");
@@ -737,7 +822,7 @@ function updateNumericFeedback(id, suffix = '') {
 function syncAllSliderDisplays() {
     updateNumericFeedback('fontScale', '%'); updateNumericFeedback('letterSpacing', 'px'); updateNumericFeedback('textRotation', '\u00b0');
     updateNumericFeedback('tileSize', 'px'); updateNumericFeedback('groutSize', 'px'); updateNumericFeedback('bevelDepth', 'px'); updateNumericFeedback('colorVariance', '%');
-    updateNumericFeedback('canvasWidth', 'px'); updateNumericFeedback('canvasHeight', 'px');
+    updateNumericFeedback('canvasWidth', 'px'); updateNumericFeedback('canvasHeight', 'px'); updateNumericFeedback('logoScale', '%');
 }
 
 const triggers = [
@@ -747,7 +832,7 @@ const triggers = [
     colorVarianceInput, groutNoiseCheckbox, tileShadingCheckbox,
     canvasWidthInput, canvasHeightInput, autoHeightCheckbox,
     borderPatternSelect, subwayBandColorPicker, subwayBorderColorPicker, subwayHeaderColorPicker,
-    showTextCheckbox
+    showTextCheckbox, contentTypeSelect, logoScaleInput
 ];
 triggers.forEach(el => { el.addEventListener('input', () => {
     syncColorLabels(); syncAllSliderDisplays(); renderMosaic();
@@ -771,7 +856,44 @@ document.querySelectorAll('.section-title').forEach(title => {
     });
 });
 
-initPalettes(); syncColorLabels(); syncAllSliderDisplays(); renderMosaic();
+// Content type switching
+contentTypeSelect.addEventListener('change', () => {
+    const isLogo = contentTypeSelect.value === 'logo';
+    typographyControls.style.display = isLogo ? 'none' : 'block';
+    logoControls.style.display = isLogo ? 'block' : 'none';
+    renderMosaic();
+});
+
+// File upload listener
+logoInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    logoFileNameSpan.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+            loadedLogoImage = img;
+            createLogoMasks(img);
+            renderMosaic();
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+// Default SVG logo loader
+function loadDefaultLogo() {
+    const img = new Image();
+    img.onload = () => {
+        loadedLogoImage = img;
+        createLogoMasks(img);
+        renderMosaic();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(defaultLogoSVG);
+}
+
+initPalettes(); syncColorLabels(); syncAllSliderDisplays(); loadDefaultLogo();
 
 // ARIA: link numeric displays to sliders
 document.querySelectorAll('input[type="range"]').forEach(r => {
