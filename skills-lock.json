@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "uxui-evaluator": {
+      "source": "uxuiprinciples/agent-skills",
+      "sourceType": "github",
+      "skillPath": "uxui-evaluator/SKILL.md",
+      "computedHash": "09d1822f8fe2f4b31fbfa4b8432923a2b6cd6487426ba1da2ff3baeb4fea0cc8"
+    }
+  }
+}

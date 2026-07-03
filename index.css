@@ -560,3 +560,88 @@ textarea:focus {
     border-color: var(--accent-color);
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
 }
+
+/* Accordion Collapsible Sections */
+.section-title {
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.2s;
+    position: relative;
+    padding-right: 20px;
+}
+
+.section-title:hover {
+    color: var(--text-secondary);
+}
+
+.section-title .chevron {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%) rotate(0deg);
+    transition: transform 0.3s ease;
+    opacity: 0.5;
+}
+
+.control-section.collapsed .section-title .chevron {
+    transform: translateY(-50%) rotate(-90deg);
+}
+
+.control-section .section-body {
+    max-height: 2000px;
+    overflow: hidden;
+    transition: max-height 0.4s ease, opacity 0.3s ease;
+    opacity: 1;
+}
+
+.control-section.collapsed .section-body {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Disabled Color Picker State (finding-3) */
+.color-picker-wrapper.disabled {
+    opacity: 0.3;
+    pointer-events: none;
+    filter: grayscale(0.6);
+}
+
+/* Enhanced Color Picker Hover (finding-5) */
+.color-picker-wrapper {
+    transition: border-color 0.2s, background-color 0.2s, transform 0.15s;
+}
+
+.color-picker-wrapper:hover:not(.disabled) {
+    border-color: var(--accent-color);
+    background-color: rgba(99, 102, 241, 0.05);
+    transform: translateY(-1px);
+}
+
+/* Enhanced Primary Export Button (finding-4) */
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-color), var(--accent-hover));
+    border: none;
+    padding: 10px 24px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    transition: all 0.25s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #818cf8, var(--accent-color));
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    transform: translateY(-1px);
+}
+
+.export-actions .btn:not(.btn-primary) {
+    font-size: 0.78rem;
+    padding: 6px 12px;
+    opacity: 0.8;
+}
+
+.export-actions .btn:not(.btn-primary):hover {
+    opacity: 1;
+}

@@ -65,10 +65,10 @@ let textStartOffsetY = 0;
 
 // Curated Vintage Encaustic Palettes
 const presets = [
-    { name: "Victorian Sage", bg: "#ece7db", tileBg: "#d0c6b3", face: "#3b5842", shadow: "#b2624f", highlight: "#ebd4b0" },
-    { name: "Art Deco Navy", bg: "#e5dec9", tileBg: "#ccc2ad", face: "#162a45", shadow: "#c98f3c", highlight: "#faebcf" },
-    { name: "Tuscan Hearth", bg: "#ece3d3", tileBg: "#cca896", face: "#872b22", shadow: "#4d3936", highlight: "#dec08f" },
     { name: "Cobalt Classic", bg: "#ecece6", tileBg: "#cccabf", face: "#1e3d6b", shadow: "#7ba2cc", highlight: "#edd5b2" },
+    { name: "Art Deco Navy", bg: "#e5dec9", tileBg: "#ccc2ad", face: "#162a45", shadow: "#c98f3c", highlight: "#faebcf" },
+    { name: "Victorian Sage", bg: "#ece7db", tileBg: "#d0c6b3", face: "#3b5842", shadow: "#b2624f", highlight: "#ebd4b0" },
+    { name: "Tuscan Hearth", bg: "#ece3d3", tileBg: "#cca896", face: "#872b22", shadow: "#4d3936", highlight: "#dec08f" },
     { name: "Mid-Century Olive", bg: "#e4ded2", tileBg: "#cdbfac", face: "#4f5d2f", shadow: "#8b5a2b", highlight: "#ebd09f" },
     { name: "Retro Flamingo", bg: "#ebdcd3", tileBg: "#cca99c", face: "#d46a78", shadow: "#405d6b", highlight: "#fcedc0" }
 ];
@@ -471,8 +471,8 @@ function renderMosaic() {
     const showText = showTextCheckbox.checked;
 
     const is3DMode = (style === 'beveled');
-    shadowGroup.style.display = is3DMode ? 'flex' : 'none';
-    highlightGroup.style.display = is3DMode ? 'flex' : 'none';
+    if (is3DMode) { shadowGroup.classList.remove('disabled'); highlightGroup.classList.remove('disabled'); }
+    else { shadowGroup.classList.add('disabled'); highlightGroup.classList.add('disabled'); }
     tileShadingGroup.style.display = is3DMode ? 'flex' : 'none';
     borderSettingsGroup.style.display = hasBorder ? 'flex' : 'none';
 
@@ -749,7 +749,11 @@ const triggers = [
     borderPatternSelect, subwayBandColorPicker, subwayBorderColorPicker, subwayHeaderColorPicker,
     showTextCheckbox
 ];
-triggers.forEach(el => { el.addEventListener('input', () => { syncColorLabels(); syncAllSliderDisplays(); renderMosaic(); }); });
+triggers.forEach(el => { el.addEventListener('input', () => {
+    syncColorLabels(); syncAllSliderDisplays(); renderMosaic();
+    // Update ARIA attributes for range inputs
+    document.querySelectorAll('input[type="range"]').forEach(r => { r.setAttribute('aria-valuenow', r.value); });
+}); });
 
 btnToggleSidebar.addEventListener('click', () => {
     if (sidebar.style.display === 'none') { sidebar.style.display = 'flex'; btnToggleSidebar.style.transform = 'rotate(0deg)'; }
@@ -759,4 +763,18 @@ btnToggleSidebar.addEventListener('click', () => {
 btnExportPNG.addEventListener('click', exportPNG);
 btnExportSVG.addEventListener('click', exportSVG);
 
+// Accordion section toggle
+document.querySelectorAll('.section-title').forEach(title => {
+    title.addEventListener('click', () => {
+        const section = title.closest('.control-section');
+        section.classList.toggle('collapsed');
+    });
+});
+
 initPalettes(); syncColorLabels(); syncAllSliderDisplays(); renderMosaic();
+
+// ARIA: link numeric displays to sliders
+document.querySelectorAll('input[type="range"]').forEach(r => {
+    const feedback = document.getElementById('val-' + r.id);
+    if (feedback) { r.setAttribute('aria-describedby', feedback.id); }
+});
