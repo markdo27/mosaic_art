@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vintage 3D Typography Mosaic Engine</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Sidebar Controls -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: #6366f1;">
+                        <rect x="3" y="3" width="7" height="9" rx="1" />
+                        <rect x="14" y="3" width="7" height="5" rx="1" />
+                        <rect x="14" y="12" width="7" height="9" rx="1" />
+                        <rect x="3" y="16" width="7" height="5" rx="1" />
+                    </svg>
+                    Mosaic System
+                </h1>
+                <p>Encaustic 3D Typography Tile Engine</p>
+            </div>
+
+            <div class="sidebar-content">
+                <!-- Section 1: Typography -->
+                <div class="control-section">
+                    <h2 class="section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
+                        Typography
+                    </h2>
+                    <div class="control-card">
+                        <div class="control-group">
+                            <label for="textInput">Mosaic Text (Multi-line)</label>
+                            <textarea id="textInput" rows="3" placeholder="Type letters...">AMERICAN
+ENCAUSTIC
+TILING CO.</textarea>
+                        </div>
+                        
+                        <div class="control-group">
+                            <label for="textFont">Font Face</label>
+                            <select id="textFont">
+                                <option value="Arial, sans-serif" selected>Arial (Bold Sans)</option>
+                                <option value="'Times New Roman', serif">Times New Roman (Classic Serif)</option>
+                                <option value="'Cinzel', serif">Cinzel (Roman Serif)</option>
+                                <option value="'Shrikhand', display">Shrikhand (Retro Bold)</option>
+                                <option value="'Space Mono', monospace">Space Mono (Tech Slab)</option>
+                                <option value="'Montserrat', sans-serif">Montserrat (Modern Grotesk)</option>
+                                <option value="'Playfair Display', serif">Playfair Display (Classy Serif)</option>
+                                <option value="'Outfit', sans-serif">Outfit (Clean Geometric)</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="fontScale">Font Size <span class="numeric-display" id="val-fontScale">100%</span></label>
+                            <input type="range" id="fontScale" min="30" max="250" value="100">
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="letterSpacing">Spacing <span class="numeric-display" id="val-letterSpacing">0px</span></label>
+                                <input type="range" id="letterSpacing" min="-20" max="40" value="0">
+                            </div>
+                            <div class="control-group">
+                                <label for="textRotation">Rotation <span class="numeric-display" id="val-textRotation">0°</span></label>
+                                <input type="range" id="textRotation" min="-45" max="45" value="0">
+                            </div>
+                        </div>
+
+                        <div class="switch-group" style="margin-top: 15px;">
+                            <label for="showText">Show Mosaic Text</label>
+                            <label class="switch">
+                                <input type="checkbox" id="showText" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Canvas & Layout -->
+                <div class="control-section">
+                    <h2 class="section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M9 3v18M15 3v18M3 9h18M3 15h18"></path></svg>
+                        Canvas &amp; Layout
+                    </h2>
+                    <div class="control-card">
+                        <div class="control-group">
+                            <label for="canvasWidth">Width <span class="numeric-display" id="val-canvasWidth">900px</span></label>
+                            <input type="range" id="canvasWidth" min="300" max="2400" value="900">
+                        </div>
+                        <div class="control-group">
+                            <label for="canvasHeight">Height <span class="numeric-display" id="val-canvasHeight">350px</span></label>
+                            <input type="range" id="canvasHeight" min="150" max="1500" value="350">
+                        </div>
+                        <div class="switch-group">
+                            <label for="autoHeight">Auto-adjust Height</label>
+                            <label class="switch">
+                                <input type="checkbox" id="autoHeight" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <hr class="section-divider">
+                        <div class="control-group">
+                            <label for="borderPattern">Border Pattern</label>
+                            <select id="borderPattern">
+                                <option value="none" selected>No Border</option>
+                                <option value="subway">NYC Subway Mosaic</option>
+                                <option value="greek">Greek Key Meander</option>
+                                <option value="artdeco">Art Deco Geometric</option>
+                                <option value="victorian">Victorian Flourish</option>
+                            </select>
+                        </div>
+                        <div id="borderSettingsGroup" style="display: none;">
+                            <div class="color-pickers-grid">
+                                <div class="color-picker-wrapper" onclick="document.getElementById('subwayBandColor').click()">
+                                    <input type="color" id="subwayBandColor" value="#e3dbca">
+                                    <div class="color-picker-label">
+                                        <span>Band Color</span>
+                                        <span id="lbl-subwayBandColor">#E3DBCA</span>
+                                    </div>
+                                </div>
+                                <div class="color-picker-wrapper" onclick="document.getElementById('subwayBorderColor').click()">
+                                    <input type="color" id="subwayBorderColor" value="#487868">
+                                    <div class="color-picker-label">
+                                        <span>Border Color</span>
+                                        <span id="lbl-subwayBorderColor">#487868</span>
+                                    </div>
+                                </div>
+                                <div class="color-picker-wrapper" onclick="document.getElementById('subwayHeaderColor').click()">
+                                    <input type="color" id="subwayHeaderColor" value="#e3dbca">
+                                    <div class="color-picker-label">
+                                        <span>Accent Color</span>
+                                        <span id="lbl-subwayHeaderColor">#E3DBCA</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Tile Style -->
+                <div class="control-section">
+                    <h2 class="section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                        Tile Style
+                    </h2>
+                    <div class="control-card">
+                        <div class="control-group">
+                            <label for="tileStyle">Catalog Pattern</label>
+                            <select id="tileStyle">
+                                <option value="square">No. 1 (Standard Squares)</option>
+                                <option value="beveled" selected>No. 2 (3D Beveled Blocks)</option>
+                                <option value="circle">No. 3 (Offset Ceramic Circles)</option>
+                                <option value="hexagon">No. 4 (Hexagonal Pave)</option>
+                                <option value="triangle">No. 5 (Alternating Triangles)</option>
+                                <option value="diamond">No. 6 (Diamond Rhombuses)</option>
+                            </select>
+                        </div>
+
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="tileSize">Tile Size <span class="numeric-display" id="val-tileSize">12px</span></label>
+                                <input type="range" id="tileSize" min="5" max="30" value="12">
+                            </div>
+                            <div class="control-group">
+                                <label for="groutSize">Grout Width <span class="numeric-display" id="val-groutSize">1.2px</span></label>
+                                <input type="range" id="groutSize" min="0" max="5" step="0.2" value="1.2">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <label for="bevelDepth">Bevel Styling <span class="numeric-display" id="val-bevelDepth">1.5px</span></label>
+                            <input type="range" id="bevelDepth" min="0" max="4" step="0.5" value="1.5">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: Colors & Textures -->
+                <div class="control-section">
+                    <h2 class="section-title">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"></path><path d="M7.5 10.5C8.32843 10.5 9 9.82843 9 9C9 8.17157 8.32843 7.5 7.5 7.5C6.67157 7.5 6 8.17157 6 9C6 9.82843 6.67157 10.5 7.5 10.5Z"></path><path d="M11.5 7.5C12.3284 7.5 13 6.82843 13 6C13 5.17157 12.3284 4.5 11.5 4.5C10.6716 4.5 10 5.17157 10 6C10 6.82843 10.6716 7.5 11.5 7.5Z"></path><path d="M16.5 10.5C17.3284 10.5 18 9.82843 18 9C18 8.17157 17.3284 7.5 16.5 7.5C15.6716 7.5 15 8.17157 15 9C15 9.82843 15.6716 10.5 16.5 10.5Z"></path><path d="M6 14C6 14 7.5 16.5 12 16.5C16.5 16.5 18 14 18 14"></path></svg>
+                        Colors &amp; Textures
+                    </h2>
+
+                    <h3 class="sub-section-title">Quick Presets</h3>
+                    <div class="control-card">
+                        <div class="preset-grid" id="palettePresets">
+                            <!-- Preset Buttons Injected via JS -->
+                        </div>
+                    </div>
+
+                    <h3 class="sub-section-title">Manual Colors</h3>
+                    <div class="control-card">
+                        <div class="color-pickers-grid">
+                            <div class="color-picker-wrapper" onclick="document.getElementById('bgColor').click()">
+                                <input type="color" id="bgColor" value="#ffffff">
+                                <div class="color-picker-label">
+                                    <span>Background Tiles</span>
+                                    <span id="lbl-bgColor">#FFFFFF</span>
+                                </div>
+                            </div>
+                            <div class="color-picker-wrapper" onclick="document.getElementById('tileBgColor').click()">
+                                <input type="color" id="tileBgColor" value="#e8e8e8">
+                                <div class="color-picker-label">
+                                    <span>Grout Color</span>
+                                    <span id="lbl-tileBgColor">#E8E8E8</span>
+                                </div>
+                            </div>
+                            <div class="color-picker-wrapper" onclick="document.getElementById('faceColor').click()">
+                                <input type="color" id="faceColor" value="#5b7d62">
+                                <div class="color-picker-label">
+                                    <span>Text Face</span>
+                                    <span id="lbl-faceColor">#5B7D62</span>
+                                </div>
+                            </div>
+                            <div class="color-picker-wrapper" id="shadowGroup" onclick="document.getElementById('shadowColor').click()">
+                                <input type="color" id="shadowColor" value="#c46a58">
+                                <div class="color-picker-label">
+                                    <span>3D Shadow</span>
+                                    <span id="lbl-shadowColor">#C46A58</span>
+                                </div>
+                            </div>
+                            <div class="color-picker-wrapper" id="highlightGroup" onclick="document.getElementById('highlightColor').click()">
+                                <input type="color" id="highlightColor" value="#d8c19a">
+                                <div class="color-picker-label">
+                                    <span>Highlight</span>
+                                    <span id="lbl-highlightColor">#D8C19A</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h3 class="sub-section-title">Organic Effects</h3>
+                    <div class="control-card">
+                        <div class="control-group">
+                            <label for="colorVariance">Color Texture Variance <span class="numeric-display" id="val-colorVariance">0%</span></label>
+                            <input type="range" id="colorVariance" min="0" max="30" value="0">
+                        </div>
+                        <div class="switch-group">
+                            <label for="groutNoise">Grout Sandy Noise</label>
+                            <label class="switch">
+                                <input type="checkbox" id="groutNoise">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div class="switch-group" id="tileShadingGroup">
+                            <label for="tileShading">3D Ceramic Lighting</label>
+                            <label class="switch">
+                                <input type="checkbox" id="tileShading">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Viewport Workspace -->
+        <main class="viewport">
+            <!-- Header Bar -->
+            <header class="viewport-header">
+                <div class="viewport-title">
+                    <button class="toggle-sidebar" title="Toggle Sidebar">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                    </button>
+                    Studio Viewport
+                    <span id="canvasResIndicator">1000 x 450</span>
+                </div>
+                
+                <div class="export-actions">
+                    <div class="control-group" style="flex-direction: row; align-items: center; gap: 8px;">
+                        <select id="exportScale" style="padding: 6px 12px; font-size: 0.8rem; width: 90px; background-color: var(--bg-tertiary);">
+                            <option value="1">PNG 1x</option>
+                            <option value="2">PNG 2x</option>
+                            <option value="4" selected>PNG 4x</option>
+                            <option value="8">PNG 8x</option>
+                        </select>
+                        <button class="btn btn-primary" id="btnExportPNG">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Export Image
+                        </button>
+                    </div>
+                    <button class="btn" id="btnExportSVG">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        SVG Vector
+                    </button>
+                </div>
+            </header>
+
+            <!-- Main Interactive Canvas Container -->
+            <div class="canvas-container" id="canvasScrollArea">
+                <canvas id="mosaicCanvas"></canvas>
+            </div>
+
+            <!-- Footer Details -->
+            <footer class="viewport-footer">
+                <div class="interaction-hint">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                    <span>Click and drag text directly on the canvas to reposition it.</span>
+                </div>
+                <div>Rendered in <span id="renderTimeIndicator">0ms</span></div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Toast Notification Overlay -->
+    <div class="toast" id="toastNotification">Export completed successfully!</div>
+
+    <script src="app.js"></script>
+</body>
+</html>
