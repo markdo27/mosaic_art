@@ -533,8 +533,19 @@ function renderMosaic() {
         contentHeight = loadedLogoImage.height * logoScale;
     }
 
-    // Responsive border rows
-    const borderRows = hasBorder ? Math.max(4, Math.min(14, Math.round(canvasWidth / tileSize * 0.1))) : 0;
+    // Responsive border rows — track both width and height
+    let borderRows = 0;
+    if (hasBorder) {
+        const widthBased = Math.max(4, Math.min(14, Math.round(canvasWidth / tileSize * 0.1)));
+        if (autoHeight) {
+            borderRows = widthBased;
+        } else {
+            // Manual height: grow borders to fill available vertical space
+            const availableSpace = Math.max(0, canvasHeight - contentHeight - tileSize * 4);
+            const heightBased = Math.floor(availableSpace / (2 * tileSize));
+            borderRows = Math.max(widthBased, Math.min(28, heightBased));
+        }
+    }
     const borderHeight = borderRows * tileSize;
     const layoutPadding = hasBorder ? (borderHeight * 2 + tileSize * 4) : (padding * 2);
     const requiredCanvasHeight = autoHeight ? Math.max(350, contentHeight + layoutPadding) : canvasHeight;
@@ -688,7 +699,18 @@ function generateSVGString() {
     }
 
     const is3DMode = (style === 'beveled'), borderPattern = borderPatternSelect.value, hasBorder = borderPattern !== 'none';
-    const borderRows = hasBorder ? Math.max(4, Math.min(14, Math.round(canvasWidth/tileSize*0.1))) : 0;
+    const autoHeight = autoHeightCheckbox.checked;
+    let borderRows = 0;
+    if (hasBorder) {
+        const widthBased = Math.max(4, Math.min(14, Math.round(canvasWidth/tileSize*0.1)));
+        if (autoHeight) {
+            borderRows = widthBased;
+        } else {
+            const availableSpace = Math.max(0, canvasHeight - contentHeight - tileSize * 4);
+            const heightBased = Math.floor(availableSpace / (2 * tileSize));
+            borderRows = Math.max(widthBased, Math.min(28, heightBased));
+        }
+    }
     const borderHeight = borderRows*tileSize;
 
     const emitRect = (sx,sy,sz,c) => { svg += `    <rect x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="${c}" />\n`; if (useTileShading && bevelDepth > 0) svg += `    <rect x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="url(#bevel-gloss)" opacity="0.8" />\n`; };
