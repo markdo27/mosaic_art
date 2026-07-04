@@ -91,7 +91,14 @@ const presets = [
     { name: "Victorian Sage", bg: "#ece7db", tileBg: "#d0c6b3", face: "#3b5842", shadow: "#b2624f", highlight: "#ebd4b0" },
     { name: "Tuscan Hearth", bg: "#ece3d3", tileBg: "#cca896", face: "#872b22", shadow: "#4d3936", highlight: "#dec08f" },
     { name: "Mid-Century Olive", bg: "#e4ded2", tileBg: "#cdbfac", face: "#4f5d2f", shadow: "#8b5a2b", highlight: "#ebd09f" },
-    { name: "Retro Flamingo", bg: "#ebdcd3", tileBg: "#cca99c", face: "#d46a78", shadow: "#405d6b", highlight: "#fcedc0" }
+    { name: "Retro Flamingo", bg: "#ebdcd3", tileBg: "#cca99c", face: "#d46a78", shadow: "#405d6b", highlight: "#fcedc0" },
+    // ── Vietnamese Encaustic Palettes (inspired by the 12 tile photo) ──
+    { name: "🌺 Saigon Navy",        bg: "#e8e0d5", tileBg: "#c5bfb0", face: "#1e3a5f", shadow: "#7faabf", highlight: "#d4b48c" },
+    { name: "🌺 Hội An Terracotta",  bg: "#f0e5d8", tileBg: "#d4a88a", face: "#b85230", shadow: "#5a8a6a", highlight: "#f0d090" },
+    { name: "🌺 Indochine Gold",     bg: "#e8dcc5", tileBg: "#c0a870", face: "#1a2d4a", shadow: "#c08828", highlight: "#f0e0a8" },
+    { name: "🌺 Đà Lạt Coral",      bg: "#f5e5e0", tileBg: "#d4a09a", face: "#c03858", shadow: "#e87050", highlight: "#fce4b0" },
+    { name: "🌺 Hanoi Rosette",     bg: "#dde8f0", tileBg: "#a8c5d8", face: "#185878", shadow: "#c8a030", highlight: "#e8f2f8" },
+    { name: "🌺 Mekong Baroque",    bg: "#ede8d5", tileBg: "#c5b082", face: "#4a2808", shadow: "#3a8880", highlight: "#e8d0a0" }
 ];
 
 // Helper: Show Toast Notification
@@ -380,14 +387,488 @@ function getVictorianTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, bo
 }
 
 // ============================================================
+// PATTERN 5: VIETNAMESE ENCAUSTIC
+// ============================================================
+
+// Returns base tile color for the border zone (motif overlay drawn separately)
+function getVietnameseTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
+    const bandC = subwayBandColorPicker.value;
+    // Text band: sample text color as usual
+    if (y >= tbYs && y < tbYe) {
+        const tc = sampleTextColor(data, x, y, cw, ch, is3D, fc, sc, hc);
+        return tc !== null ? tc : bandC;
+    }
+    // Border bands: flat band color — motifs overlaid in renderVietnameseBands()
+    return bandC;
+}
+
+/**
+ * Draw one Vietnamese encaustic tile motif (6 distinct types cycling mod 6).
+ * Motif types are inspired by the 12 patterns in the reference photo.
+ * @param {CanvasRenderingContext2D} tCtx
+ * @param {number} tx  top-left x of the cell
+ * @param {number} ty  top-left y of the cell
+ * @param {number} cs  cell size (square)
+ * @param {number} motifIdx  cycling index (mod 6 used internally)
+ * @param {string} bgC   background cut-out color
+ * @param {string} priC  primary motif color
+ * @param {string} secC  secondary / field color
+ * @param {string} accC  accent / highlight color
+ */
+function drawVietnameseMotif(tCtx, tx, ty, cs, motifIdx, bgC, priC, secC, accC) {
+    const cmx = tx + cs / 2, cmy = ty + cs / 2;
+    const r   = cs * 0.46;
+    const lw  = Math.max(1, cs * 0.042);
+
+    tCtx.save();
+    tCtx.beginPath();
+    tCtx.rect(tx, ty, cs, cs);
+    tCtx.clip();
+
+    // Solid cell background (overrides the small-tile grid lines for a clean canvas)
+    tCtx.fillStyle = secC;
+    tCtx.fillRect(tx, ty, cs, cs);
+
+    // Thin outer frame line around the full cell
+    tCtx.strokeStyle = priC;
+    tCtx.lineWidth = Math.max(1, lw * 0.7);
+    tCtx.strokeRect(tx + lw, ty + lw, cs - lw * 2, cs - lw * 2);
+
+    switch (motifIdx % 6) {
+
+        // ── 0  Compass Rose  (Tile 1 from photo) ──────────────────────────
+        // Navy ring of petals, corner accent circles, concentric borders
+        case 0: {
+            // Outer & inner concentric rings
+            tCtx.strokeStyle = priC; tCtx.lineWidth = lw;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.90, 0, Math.PI * 2); tCtx.stroke();
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.66, 0, Math.PI * 2); tCtx.stroke();
+
+            // 4 elliptical petals at N / S / E / W
+            tCtx.fillStyle = priC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                tCtx.save();
+                tCtx.translate(cmx + Math.cos(a) * r * 0.33, cmy + Math.sin(a) * r * 0.33);
+                tCtx.rotate(a + Math.PI / 2);
+                tCtx.beginPath();
+                tCtx.ellipse(0, 0, r * 0.16, r * 0.28, 0, 0, Math.PI * 2);
+                tCtx.fill();
+                tCtx.restore();
+            }
+
+            // 4 accent circles at diagonal corners
+            tCtx.fillStyle = accC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 4;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.62, cmy + Math.sin(a) * r * 0.62, r * 0.12, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // Center medallion
+            tCtx.fillStyle = priC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.18, 0, Math.PI * 2); tCtx.fill();
+            tCtx.fillStyle = secC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.09, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+
+        // ── 1  Baroque Cross  (Tile 2 from photo) ─────────────────────────
+        // Dark-brown 4-armed cross with knobbed terminals; teal star center
+        case 1: {
+            // Corner accent fills (yellow in photo)
+            tCtx.fillStyle = accC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.72, cmy + Math.sin(a) * r * 0.72, r * 0.28, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // 4 arms + terminal knobs (dark primary color)
+            tCtx.fillStyle = priC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                tCtx.save();
+                tCtx.translate(cmx, cmy);
+                tCtx.rotate(a);
+                // Arm shaft
+                tCtx.beginPath();
+                tCtx.rect(-lw * 1.8, 0, lw * 3.6, r * 0.68);
+                tCtx.fill();
+                // Terminal knob
+                tCtx.beginPath(); tCtx.arc(0,        r * 0.72, r * 0.13, 0, Math.PI * 2); tCtx.fill();
+                // Side buds on the terminal
+                tCtx.beginPath(); tCtx.arc(-r * 0.15, r * 0.64, r * 0.09, 0, Math.PI * 2); tCtx.fill();
+                tCtx.beginPath(); tCtx.arc( r * 0.15, r * 0.64, r * 0.09, 0, Math.PI * 2); tCtx.fill();
+                tCtx.restore();
+            }
+
+            // Central 12-point star (teal/cyan accent)
+            tCtx.fillStyle = accC;
+            tCtx.beginPath();
+            for (let i = 0; i < 12; i++) {
+                const a  = (Math.PI / 6) * i;
+                const rr = i % 2 === 0 ? r * 0.22 : r * 0.11;
+                const px = cmx + Math.cos(a) * rr, py = cmy + Math.sin(a) * rr;
+                i === 0 ? tCtx.moveTo(px, py) : tCtx.lineTo(px, py);
+            }
+            tCtx.closePath(); tCtx.fill();
+
+            // Center eye
+            tCtx.fillStyle = bgC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.08, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+
+        // ── 2  Clover Arcs  (Tile 4 from photo) ──────────────────────────
+        // Terracotta overlapping arcs, sage corner diamonds, ivory cutout
+        case 2: {
+            // 4 large circular petal arcs at N/S/E/W
+            tCtx.fillStyle = priC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.38, cmy + Math.sin(a) * r * 0.38, r * 0.40, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // Reveal inner background circle (creates the clover hole)
+            tCtx.fillStyle = secC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.28, 0, Math.PI * 2); tCtx.fill();
+
+            // Corner pointed diamond leaves (accent = sage in photo)
+            tCtx.fillStyle = accC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                tCtx.save();
+                tCtx.translate(cmx + Math.cos(a) * r * 0.76, cmy + Math.sin(a) * r * 0.76);
+                tCtx.rotate(a + Math.PI / 4);
+                tCtx.beginPath();
+                tCtx.moveTo(0, -r * 0.20);
+                tCtx.lineTo(r * 0.11, 0);
+                tCtx.lineTo(0,  r * 0.20);
+                tCtx.lineTo(-r * 0.11, 0);
+                tCtx.closePath();
+                tCtx.fill();
+                tCtx.restore();
+            }
+
+            // Center dot accent
+            tCtx.fillStyle = accC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.14, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+
+        // ── 3  Fleur-de-lis Quatrefoil  (Tile 8 from photo) ───────────────
+        // Deep navy fleur shapes on terracotta; gold center circle
+        case 3: {
+            // Corner ornament dots
+            tCtx.fillStyle = accC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.82, cmy + Math.sin(a) * r * 0.82, r * 0.13, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // 4 fleur-de-lis symbols (primary = navy in photo)
+            tCtx.fillStyle = priC;
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                tCtx.save();
+                tCtx.translate(cmx, cmy);
+                tCtx.rotate(a);
+                // Main upward petal
+                tCtx.beginPath(); tCtx.ellipse(0, -r * 0.54, r * 0.16, r * 0.24, 0, 0, Math.PI * 2); tCtx.fill();
+                // Left wing
+                tCtx.beginPath(); tCtx.ellipse(-r * 0.18, -r * 0.37, r * 0.13, r * 0.15, -0.38, 0, Math.PI * 2); tCtx.fill();
+                // Right wing
+                tCtx.beginPath(); tCtx.ellipse( r * 0.18, -r * 0.37, r * 0.13, r * 0.15,  0.38, 0, Math.PI * 2); tCtx.fill();
+                // Stem
+                tCtx.beginPath(); tCtx.rect(-lw * 1.1, -r * 0.28, lw * 2.2, r * 0.28); tCtx.fill();
+                tCtx.restore();
+            }
+
+            // Central double-circle (gold accent + primary inner)
+            tCtx.fillStyle = accC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.25, 0, Math.PI * 2); tCtx.fill();
+            tCtx.fillStyle = priC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.15, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+
+        // ── 4  Star Rosette  (Tile 11 from photo) ────────────────────────
+        // Sky-blue background; gold/yellow 8-pointed star; white dot ring
+        case 4: {
+            // Outer accent ring
+            tCtx.strokeStyle = priC; tCtx.lineWidth = lw * 0.85;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.88, 0, Math.PI * 2); tCtx.stroke();
+
+            // 8-pointed star (primary color)
+            tCtx.fillStyle = priC;
+            tCtx.beginPath();
+            for (let i = 0; i < 16; i++) {
+                const a  = (Math.PI / 8) * i - Math.PI / 2;
+                const rr = i % 2 === 0 ? r * 0.76 : r * 0.36;
+                const px = cmx + Math.cos(a) * rr, py = cmy + Math.sin(a) * rr;
+                i === 0 ? tCtx.moveTo(px, py) : tCtx.lineTo(px, py);
+            }
+            tCtx.closePath(); tCtx.fill();
+
+            // White dot ring (8 dots at mid-radius)
+            tCtx.fillStyle = bgC;
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI / 4) * i;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.56, cmy + Math.sin(a) * r * 0.56, r * 0.075, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // Center: accent circle then sec cutout
+            tCtx.fillStyle = accC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.23, 0, Math.PI * 2); tCtx.fill();
+            tCtx.fillStyle = secC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.13, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+
+        // ── 5  Sunburst Medallion  (Tiles 7 & 12 from photo) ─────────────
+        // Radiating 12 petals; ring; central nested circles with dot accents
+        case 5: {
+            // 12 radiating petals
+            tCtx.fillStyle = priC;
+            for (let i = 0; i < 12; i++) {
+                const a = (Math.PI / 6) * i;
+                tCtx.save();
+                tCtx.translate(cmx, cmy);
+                tCtx.rotate(a);
+                tCtx.beginPath();
+                tCtx.ellipse(0, -r * 0.60, r * 0.11, r * 0.27, 0, 0, Math.PI * 2);
+                tCtx.fill();
+                tCtx.restore();
+            }
+
+            // Inner secondary field circle
+            tCtx.fillStyle = secC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.38, 0, Math.PI * 2); tCtx.fill();
+
+            // Accent ring stroke
+            tCtx.strokeStyle = priC; tCtx.lineWidth = lw * 1.3;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.38, 0, Math.PI * 2); tCtx.stroke();
+
+            // 8 small dot accents just inside the ring
+            tCtx.fillStyle = accC;
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI / 4) * i;
+                tCtx.beginPath();
+                tCtx.arc(cmx + Math.cos(a) * r * 0.52, cmy + Math.sin(a) * r * 0.52, r * 0.07, 0, Math.PI * 2);
+                tCtx.fill();
+            }
+
+            // Center nested circles
+            tCtx.fillStyle = priC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.26, 0, Math.PI * 2); tCtx.fill();
+            tCtx.fillStyle = accC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.15, 0, Math.PI * 2); tCtx.fill();
+            tCtx.fillStyle = secC;
+            tCtx.beginPath(); tCtx.arc(cmx, cmy, r * 0.07, 0, Math.PI * 2); tCtx.fill();
+            break;
+        }
+    }
+
+    tCtx.restore();
+}
+
+/**
+ * Render Vietnamese encaustic tile motifs as an overlay on the top and bottom border bands.
+ * Called after the base tile grid has been drawn inside renderMosaic().
+ */
+function renderVietnameseBands(targetCtx, topYStart, tbYStart, tbYEnd, botYEnd, cw, bandH, groutSize) {
+    if (bandH < 12) return; // too thin to draw anything useful
+    const cs   = bandH;   // each Vietnamese tile = square with side = full band height
+    const priC = subwayBorderColorPicker.value;
+    const secC = subwayBandColorPicker.value;
+    const accC = subwayHeaderColorPicker.value;
+    const bgC  = bgColorPicker.value;
+
+    // Draw top band, then bottom band
+    const bands = [
+        { y: topYStart, label: 0 },
+        { y: tbYEnd,    label: 3 }  // offset bottom motif sequence by 3
+    ];
+    for (const { y: by, label } of bands) {
+        for (let x = 0; x < cw; x += cs) {
+            const availW = cw - x;
+            if (availW < cs * 0.2) continue; // skip hairline slivers
+            const motifIdx = Math.floor(x / cs) + label;
+            drawVietnameseMotif(targetCtx, x, by, Math.min(cs, availW), motifIdx, bgC, priC, secC, accC);
+        }
+    }
+}
+
+/**
+ * Generate the SVG elements for a Vietnamese encaustic tile motif.
+ * Mirrors drawVietnameseMotif() for vector export.
+ */
+function getVietnameseMotifSVGString(tx, ty, cs, motifIdx, bgC, priC, secC, accC) {
+    const cmx = tx + cs / 2, cmy = ty + cs / 2;
+    const r   = cs * 0.46;
+    const lw  = Math.max(1, cs * 0.042);
+    
+    const clipId = `clip-viet-${tx.toFixed(0)}-${ty.toFixed(0)}`;
+    let s = `    <clipPath id="${clipId}">\n      <rect x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" width="${cs.toFixed(1)}" height="${cs.toFixed(1)}" />\n    </clipPath>\n`;
+    s += `    <g clip-path="url(#${clipId})">\n`;
+    
+    // Solid cell background
+    s += `      <rect x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" width="${cs.toFixed(1)}" height="${cs.toFixed(1)}" fill="${secC}" />\n`;
+    
+    // Thin outer frame line
+    s += `      <rect x="${(tx + lw).toFixed(1)}" y="${(ty + lw).toFixed(1)}" width="${(cs - lw * 2).toFixed(1)}" height="${(cs - lw * 2).toFixed(1)}" fill="none" stroke="${priC}" stroke-width="${(lw * 0.7).toFixed(2)}" />\n`;
+    
+    switch (motifIdx % 6) {
+        case 0: { // Compass Rose
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.90).toFixed(1)}" fill="none" stroke="${priC}" stroke-width="${lw.toFixed(2)}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.66).toFixed(1)}" fill="none" stroke="${priC}" stroke-width="${lw.toFixed(2)}" />\n`;
+            
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                const px = cmx + Math.cos(a) * r * 0.33;
+                const py = cmy + Math.sin(a) * r * 0.33;
+                const rot = (a + Math.PI / 2) * 180 / Math.PI;
+                s += `      <ellipse cx="0" cy="0" rx="${(r * 0.16).toFixed(1)}" ry="${(r * 0.28).toFixed(1)}" fill="${priC}" transform="translate(${px.toFixed(1)}, ${py.toFixed(1)}) rotate(${rot.toFixed(1)})" />\n`;
+            }
+            
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 4;
+                const px = cmx + Math.cos(a) * r * 0.62;
+                const py = cmy + Math.sin(a) * r * 0.62;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.12).toFixed(1)}" fill="${accC}" />\n`;
+            }
+            
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.18).toFixed(1)}" fill="${priC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.09).toFixed(1)}" fill="${secC}" />\n`;
+            break;
+        }
+        case 1: { // Baroque Cross
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                const px = cmx + Math.cos(a) * r * 0.72;
+                const py = cmy + Math.sin(a) * r * 0.72;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.28).toFixed(1)}" fill="${accC}" />\n`;
+            }
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                const rot = a * 180 / Math.PI;
+                s += `      <g transform="translate(${cmx.toFixed(1)}, ${cmy.toFixed(1)}) rotate(${rot.toFixed(1)})">\n`;
+                s += `        <rect x="${(-lw * 1.8).toFixed(1)}" y="0" width="${(lw * 3.6).toFixed(1)}" height="${(r * 0.68).toFixed(1)}" fill="${priC}" />\n`;
+                s += `        <circle cx="0" cy="${(r * 0.72).toFixed(1)}" r="${(r * 0.13).toFixed(1)}" fill="${priC}" />\n`;
+                s += `        <circle cx="${(-r * 0.15).toFixed(1)}" cy="${(r * 0.64).toFixed(1)}" r="${(r * 0.09).toFixed(1)}" fill="${priC}" />\n`;
+                s += `        <circle cx="${(r * 0.15).toFixed(1)}" cy="${(r * 0.64).toFixed(1)}" r="${(r * 0.09).toFixed(1)}" fill="${priC}" />\n`;
+                s += `      </g>\n`;
+            }
+            let starPts = [];
+            for (let i = 0; i < 12; i++) {
+                const a  = (Math.PI / 6) * i;
+                const rr = i % 2 === 0 ? r * 0.22 : r * 0.11;
+                starPts.push(`${(cmx + Math.cos(a) * rr).toFixed(1)},${(cmy + Math.sin(a) * rr).toFixed(1)}`);
+            }
+            s += `      <polygon points="${starPts.join(' ')}" fill="${accC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.08).toFixed(1)}" fill="${bgC}" />\n`;
+            break;
+        }
+        case 2: { // Clover Arcs
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i;
+                const px = cmx + Math.cos(a) * r * 0.38;
+                const py = cmy + Math.sin(a) * r * 0.38;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.40).toFixed(1)}" fill="${priC}" />\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.28).toFixed(1)}" fill="${secC}" />\n`;
+            
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                const px = cmx + Math.cos(a) * r * 0.76;
+                const py = cmy + Math.sin(a) * r * 0.76;
+                const rot = (a + Math.PI / 4) * 180 / Math.PI;
+                s += `      <polygon points="0,${(-r * 0.20).toFixed(1)} ${(r * 0.11).toFixed(1)},0 0,${(r * 0.20).toFixed(1)} ${(-r * 0.11).toFixed(1)},0" fill="${accC}" transform="translate(${px.toFixed(1)}, ${py.toFixed(1)}) rotate(${rot.toFixed(1)})" />\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.14).toFixed(1)}" fill="${accC}" />\n`;
+            break;
+        }
+        case 3: { // Fleur-de-lis Quatrefoil
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i + Math.PI / 4;
+                const px = cmx + Math.cos(a) * r * 0.82;
+                const py = cmy + Math.sin(a) * r * 0.82;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.13).toFixed(1)}" fill="${accC}" />\n`;
+            }
+            for (let i = 0; i < 4; i++) {
+                const a = (Math.PI / 2) * i - Math.PI / 2;
+                const rot = a * 180 / Math.PI;
+                s += `      <g transform="translate(${cmx.toFixed(1)}, ${cmy.toFixed(1)}) rotate(${rot.toFixed(1)})">\n`;
+                s += `        <ellipse cx="0" cy="${(-r * 0.54).toFixed(1)}" rx="${(r * 0.16).toFixed(1)}" ry="${(r * 0.24).toFixed(1)}" fill="${priC}" />\n`;
+                s += `        <ellipse cx="${(-r * 0.18).toFixed(1)}" cy="${(-r * 0.37).toFixed(1)}" rx="${(r * 0.13).toFixed(1)}" ry="${(r * 0.15).toFixed(1)}" transform="rotate(-21.7, ${(-r * 0.18).toFixed(1)}, ${(-r * 0.37).toFixed(1)})" fill="${priC}" />\n`;
+                s += `        <ellipse cx="${(r * 0.18).toFixed(1)}" cy="${(-r * 0.37).toFixed(1)}" rx="${(r * 0.13).toFixed(1)}" ry="${(r * 0.15).toFixed(1)}" transform="rotate(21.7, ${(r * 0.18).toFixed(1)}, ${(-r * 0.37).toFixed(1)})" fill="${priC}" />\n`;
+                s += `        <rect x="${(-lw * 1.1).toFixed(1)}" y="${(-r * 0.28).toFixed(1)}" width="${(lw * 2.2).toFixed(1)}" height="${(r * 0.28).toFixed(1)}" fill="${priC}" />\n`;
+                s += `      </g>\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.25).toFixed(1)}" fill="${accC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.15).toFixed(1)}" fill="${priC}" />\n`;
+            break;
+        }
+        case 4: { // Star Rosette
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.88).toFixed(1)}" fill="none" stroke="${priC}" stroke-width="${(lw * 0.85).toFixed(2)}" />\n`;
+            let starPts = [];
+            for (let i = 0; i < 16; i++) {
+                const a  = (Math.PI / 8) * i - Math.PI / 2;
+                const rr = i % 2 === 0 ? r * 0.76 : r * 0.36;
+                starPts.push(`${(cmx + Math.cos(a) * rr).toFixed(1)},${(cmy + Math.sin(a) * rr).toFixed(1)}`);
+            }
+            s += `      <polygon points="${starPts.join(' ')}" fill="${priC}" />\n`;
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI / 4) * i;
+                const px = cmx + Math.cos(a) * r * 0.56;
+                const py = cmy + Math.sin(a) * r * 0.56;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.075).toFixed(1)}" fill="${bgC}" />\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.23).toFixed(1)}" fill="${accC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.13).toFixed(1)}" fill="${secC}" />\n`;
+            break;
+        }
+        case 5: { // Sunburst Medallion
+            for (let i = 0; i < 12; i++) {
+                const rot = i * 30;
+                s += `      <ellipse cx="0" cy="${(-r * 0.60).toFixed(1)}" rx="${(r * 0.11).toFixed(1)}" ry="${(r * 0.27).toFixed(1)}" fill="${priC}" transform="translate(${cmx.toFixed(1)}, ${cmy.toFixed(1)}) rotate(${rot})" />\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.38).toFixed(1)}" fill="${secC}" stroke="${priC}" stroke-width="${(lw * 1.3).toFixed(2)}" />\n`;
+            for (let i = 0; i < 8; i++) {
+                const a = (Math.PI / 4) * i;
+                const px = cmx + Math.cos(a) * r * 0.52;
+                const py = cmy + Math.sin(a) * r * 0.52;
+                s += `      <circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="${(r * 0.07).toFixed(1)}" fill="${accC}" />\n`;
+            }
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.26).toFixed(1)}" fill="${priC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.15).toFixed(1)}" fill="${accC}" />\n`;
+            s += `      <circle cx="${cmx.toFixed(1)}" cy="${cmy.toFixed(1)}" r="${(r * 0.07).toFixed(1)}" fill="${secC}" />\n`;
+            break;
+        }
+    }
+    s += `    </g>\n`;
+    return s;
+}
+
+// ============================================================
 // UNIFIED DISPATCHER
 // ============================================================
 function getBorderTileColor(pat, x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
     switch (pat) {
-        case 'subway': return getSubwayTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
-        case 'greek': return getGreekKeyTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
-        case 'artdeco': return getArtDecoTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
-        case 'victorian': return getVictorianTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
+        case 'subway':     return getSubwayTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
+        case 'greek':      return getGreekKeyTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
+        case 'artdeco':    return getArtDecoTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
+        case 'victorian':  return getVictorianTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
+        case 'vietnamese': return getVietnameseTileColor(x,y,data,cw,ch,cx,cy,tbYs,tbYe,topYs,botYe,ts,bRows,is3D,fc,sc,hc,bg);
         default: return bg;
     }
 }
@@ -647,6 +1128,11 @@ function renderMosaic() {
             }
             smallRow++;
         }
+
+        // ── Vietnamese Encaustic: draw ornamental tile motifs over the base grid ──
+        if (borderPattern === 'vietnamese') {
+            renderVietnameseBands(ctx, TopBorderYStart, textBandYStart, textBandYEnd, BottomBorderYEnd, canvasWidth, borderHeight, groutSize);
+        }
     } else {
         let stepX = tileSize, stepY = tileSize;
         if (style === 'circle' || style === 'hexagon') stepY = tileSize * 0.866;
@@ -735,6 +1221,29 @@ function generateSVGString() {
         for (let y = botYe; y < canvasHeight+fts; y += fts) { const ox=(fr%2===1)?(fts/2):0; for(let x=-fts;x<canvasWidth+fts;x+=fts){const ax=x+ox;if(ax>canvasWidth)continue;emitRect(ax+groutSize,y+groutSize,fts-groutSize*2,getVariantColor(tileBgColor,colorVariance));} fr++; }
         let sr=0;
         for (let y = topYs; y < botYe; y += tileSize) { for(let x=0;x<canvasWidth;x+=tileSize){ const tc=getBorderTileColor(borderPattern,x,y,data,canvasWidth,canvasHeight,centerX,centerY,tbYs,tbYe,topYs,botYe,tileSize,borderRows,is3DMode,faceColor,shadowColor,highlightColor,tileBgColor); emitTile(x,y,tileSize,groutSize,getVariantColor(tc,colorVariance),style,sr); } sr++; }
+
+        // ── Vietnamese Encaustic: draw ornamental tile motifs in vector SVG ──
+        if (borderPattern === 'vietnamese' && borderHeight >= 12) {
+            const cs = borderHeight;
+            const priC = subwayBorderColorPicker.value;
+            const secC = subwayBandColorPicker.value;
+            const accC = subwayHeaderColorPicker.value;
+            const bgC  = bgColorPicker.value;
+
+            // Draw top band, then bottom band
+            const bands = [
+                { y: topYs, label: 0 },
+                { y: tbYe,  label: 3 }
+            ];
+            for (const { y: by, label } of bands) {
+                for (let x = 0; x < canvasWidth; x += cs) {
+                    const availW = canvasWidth - x;
+                    if (availW < cs * 0.2) continue;
+                    const motifIdx = Math.floor(x / cs) + label;
+                    svg += getVietnameseMotifSVGString(x, by, Math.min(cs, availW), motifIdx, bgC, priC, secC, accC);
+                }
+            }
+        }
     } else {
         let stepX=tileSize,stepY=tileSize;
         if(style==='circle'||style==='hexagon')stepY=tileSize*0.866; else if(style==='triangle'){stepX=tileSize/2;stepY=tileSize*0.866;} else if(style==='diamond'){stepX=tileSize*0.82;stepY=tileSize/2;}
