@@ -1,122 +1,308 @@
-// DOM Elements & Inputs
+/* ============================================================
+   MOSAIC SYSTEM — application
+   Assembled from head / engine / tail / ui modules.
+   ============================================================ */
+
+/* ---- app-head.js ---- */
+'use strict';
+
+/* ============================================================
+   MOSAIC SYSTEM — studio application
+   A single-page encaustic tile renderer.
+   State in, tiles out. No network, no uploads, no dependencies.
+   ============================================================ */
+
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+const STORAGE_KEY = 'mosaic-system.v3.state';
+const PRESET_KEY = 'mosaic-system.v3.presets';
+const PANEL_KEY = 'mosaic-system.v3.panel';
+const SEED = 0x5eed1a7e;
+
+/* ------------------------------------------------------------
+   State
+   ------------------------------------------------------------ */
+const DEFAULTS = {
+    text: 'AMERICAN\nENCAUSTIC\nTILING CO.',
+    font: 'Arial, sans-serif',
+    fontScale: 100,
+    letterSpacing: 0,
+    rotation: 0,
+    align: 'center',
+
+    mode: 'text',
+    logo: null,
+    logoName: '',
+    logoScale: 100,
+    showContent: true,
+
+    tileStyle: 'beveled',
+    tileSize: 12,
+    grout: 1.2,
+    bevel: 1.5,
+    shading: false,
+    noise: false,
+    variance: 0,
+
+    bg: '#ffffff',
+    tileBg: '#e8e8e8',
+    face: '#5b7d62',
+    shadow: '#c46a58',
+    highlight: '#5b7d62',
+
+    band: '#e3dbca',
+    borderColor: '#487868',
+    borderAccent: '#e3dbca',
+
+    width: 900,
+    height: 350,
+    autoHeight: true,
+    border: 'none',
+
+    textX: 0,
+    textY: 0,
+
+    docName: 'Untitled mosaic'
+};
+
+const PALETTE_KEYS = ['bg', 'tileBg', 'face', 'shadow', 'highlight', 'band', 'borderColor', 'borderAccent'];
+
+let state = Object.assign({}, DEFAULTS);
+let palette = { bg: state.bg, band: state.band, accent: state.borderAccent, border: state.borderColor };
+
+/* Deterministic randomness: preview and export must fire the same tiles. */
+let rngState = SEED >>> 0;
+function rng() {
+    rngState = (rngState + 0x6D2B79F5) >>> 0;
+    let t = rngState;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+function resetRandom(seed = SEED) { rngState = seed >>> 0; }
+
+/* ------------------------------------------------------------
+   DOM: canvases
+   ------------------------------------------------------------ */
+const canvas = document.getElementById('mosaicCanvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+const hiddenCanvas = document.createElement('canvas');
+const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
+
+const canvasScrollArea = document.getElementById('canvasScrollArea');
+const canvasFrame = document.getElementById('canvasFrame');
+const emptyState = document.getElementById('emptyState');
+const renderTimeIndicator = document.getElementById('renderTimeIndicator');
+const canvasResIndicator = document.getElementById('canvasResIndicator');
+const tileCountIndicator = document.getElementById('tileCount');
+const statusSize = document.getElementById('statusSize');
+const statusTiles = document.getElementById('statusTiles');
+const zoomLabel = document.getElementById('zoomLabel');
+const zoomFoot = document.getElementById('zoomFoot');
+const toastNotification = document.getElementById('toastNotification');
+const busyOverlay = document.getElementById('busyOverlay');
+const busyText = document.getElementById('busyText');
+
+/* ------------------------------------------------------------
+   HTML inputs
+   ------------------------------------------------------------ */
 const textInput = document.getElementById('textInput');
+const charCount = document.getElementById('charCount');
 const textFontSelect = document.getElementById('textFont');
 const fontScaleInput = document.getElementById('fontScale');
 const letterSpacingInput = document.getElementById('letterSpacing');
 const textRotationInput = document.getElementById('textRotation');
 
-const tileStyleSelect = document.getElementById('tileStyle');
+const tileStyleGrid = document.getElementById('tileStyleGrid');
+const tileStyleNo = document.getElementById('tileStyleNo');
 const tileSizeInput = document.getElementById('tileSize');
 const groutSizeInput = document.getElementById('groutSize');
 const bevelDepthInput = document.getElementById('bevelDepth');
+const colorVarianceInput = document.getElementById('colorVariance');
+const groutNoiseCheckbox = document.getElementById('groutNoise');
+const tileShadingCheckbox = document.getElementById('tileShading');
+const tileShadingGroup = document.getElementById('tileShadingGroup');
 
 const bgColorPicker = document.getElementById('bgColor');
 const tileBgColorPicker = document.getElementById('tileBgColor');
 const faceColorPicker = document.getElementById('faceColor');
 const shadowColorPicker = document.getElementById('shadowColor');
 const highlightColorPicker = document.getElementById('highlightColor');
-
 const shadowGroup = document.getElementById('shadowGroup');
 const highlightGroup = document.getElementById('highlightGroup');
-const palettePresetsGrid = document.getElementById('palettePresets');
 
-const colorVarianceInput = document.getElementById('colorVariance');
-const groutNoiseCheckbox = document.getElementById('groutNoise');
-const tileShadingCheckbox = document.getElementById('tileShading');
-const tileShadingGroup = document.getElementById('tileShadingGroup');
+const palettePresetsGrid = document.getElementById('palettePresets');
+const randomizePaletteBtn = document.getElementById('randomizePalette');
+const savePresetBtn = document.getElementById('savePreset');
+const presetCount = document.getElementById('presetCount');
 
 const canvasWidthInput = document.getElementById('canvasWidth');
 const canvasHeightInput = document.getElementById('canvasHeight');
 const autoHeightCheckbox = document.getElementById('autoHeight');
-const canvasResIndicator = document.getElementById('canvasResIndicator');
-const renderTimeIndicator = document.getElementById('renderTimeIndicator');
+const sizePresets = document.getElementById('sizePresets');
 
-// Border pattern controls (new dropdown replaces old subway checkbox)
-const borderPatternSelect = document.getElementById('borderPattern');
+const borderPatternGrid = document.getElementById('borderPatternGrid');
 const borderSettingsGroup = document.getElementById('borderSettingsGroup');
+const borderMeta = document.getElementById('borderMeta');
 const subwayBandColorPicker = document.getElementById('subwayBandColor');
 const subwayBorderColorPicker = document.getElementById('subwayBorderColor');
 const subwayHeaderColorPicker = document.getElementById('subwayHeaderColor');
 const showTextCheckbox = document.getElementById('showText');
 
-// Logo mode controls and state variables
-const contentTypeSelect = document.getElementById('contentType');
 const typographyControls = document.getElementById('typographyControls');
 const logoControls = document.getElementById('logoControls');
 const logoInput = document.getElementById('logoInput');
 const logoScaleInput = document.getElementById('logoScale');
 const logoFileNameSpan = document.getElementById('logoFileName');
+const logoDrop = document.getElementById('logoDrop');
+const textPosReadout = document.getElementById('textPosReadout');
 
+const undoBtn = document.getElementById('undoBtn');
+const redoBtn = document.getElementById('redoBtn');
+const resetBtn = document.getElementById('resetBtn');
+const docNameInput = document.getElementById('docName');
+const docSaved = document.getElementById('docSaved');
+
+const btnExportPNG = document.getElementById('btnExportPNG');
+const btnExportSVG = document.getElementById('btnExportSVG');
+const exportScaleSelect = document.getElementById('exportScale');
+
+const railButtons = $$('.rail-btn[data-panel]');
+const panel = document.getElementById('panel');
+const workspace = document.querySelector('.workspace');
+const panelTitle = document.getElementById('panelTitle');
+const panelIndex = document.getElementById('panelIndex');
+const panelCollapse = document.getElementById('panelCollapse');
+const panelReveal = document.getElementById('panelReveal');
+const panelPanes = $$('.panel-pane');
+
+const zoomInBtn = document.getElementById('zoomIn');
+const zoomOutBtn = document.getElementById('zoomOut');
+const zoomFitBtn = document.getElementById('zoomFit');
+const copyLinkBtn = document.getElementById('copyLink');
+const aboutBtn = document.getElementById('aboutBtn');
+const aboutDialog = document.getElementById('aboutDialog');
+const aboutClose = document.getElementById('aboutClose');
+
+/* ------------------------------------------------------------
+   Small helpers
+   ------------------------------------------------------------ */
+const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const nextFrame = () => new Promise(resolve => requestAnimationFrame(() => resolve()));
+
+// Only weights that each family actually ships — avoids ugly synthetic bolding.
+function fontWeightFor(font) {
+    if (/Times/.test(font)) return '700';
+    if (/Shrikhand/.test(font)) return '400';
+    if (/Space Mono/.test(font)) return '700';
+    if (/Playfair/.test(font)) return '700';
+    if (/Cinzel/.test(font)) return '700';
+    if (/Outfit/.test(font)) return '600';
+    if (/Montserrat/.test(font)) return '900';
+    return '900';
+}
+
+function showToast(message, duration = 3200) {
+    toastNotification.textContent = message;
+    toastNotification.classList.add('show');
+    window.clearTimeout(showToast._timer);
+    showToast._timer = window.setTimeout(() => toastNotification.classList.remove('show'), duration);
+}
+
+function setBusy(isBusy, message = 'Rendering…') {
+    busyOverlay.hidden = !isBusy;
+    busyText.textContent = message;
+    document.body.setAttribute('aria-busy', String(isBusy));
+}
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function slugify(value, fallback = 'mosaic') {
+    const slug = String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return slug || fallback;
+}
+
+/* ------------------------------------------------------------
+   Logo state (kept outside the serialisable studio state)
+   ------------------------------------------------------------ */
 let loadedLogoImage = null;
 let logoMaskRed = null;
 let logoMaskGreen = null;
 let logoMaskBlue = null;
 
-const defaultLogoSVG = `
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <path d="M50,5 L95,50 L50,95 L5,50 Z" fill="#000" />
-  <path d="M50,22 L78,50 L50,78 L22,50 Z" fill="#fff" />
-  <circle cx="50" cy="50" r="10" fill="#000" />
-</svg>
-`.trim();
+const defaultLogoSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><path d="M50,5 L95,50 L50,95 L5,50 Z" fill="#000"/><path d="M50,22 L78,50 L50,78 L22,50 Z" fill="#fff"/><circle cx="50" cy="50" r="10" fill="#000"/></svg>`;
 
-const canvas = document.getElementById('mosaicCanvas');
-const ctx = canvas.getContext('2d', { willReadFrequently: true });
-const hiddenCanvas = document.createElement('canvas');
-const hiddenCtx = hiddenCanvas.getContext('2d', { willReadFrequently: true });
-
-// Export buttons
-const btnExportPNG = document.getElementById('btnExportPNG');
-const btnExportSVG = document.getElementById('btnExportSVG');
-const exportScaleSelect = document.getElementById('exportScale');
-const toastNotification = document.getElementById('toastNotification');
-
-// Sidebar toggle
-const btnToggleSidebar = document.querySelector('.toggle-sidebar');
-const sidebar = document.querySelector('.sidebar');
-
-// Interactivity State
-let textX = 0;
-let textY = 0;
-let isDraggingText = false;
-let startDragX = 0;
-let startDragY = 0;
-let textStartOffsetX = 0;
-let textStartOffsetY = 0;
-
-// Curated Vintage Encaustic Palettes
-const presets = [
-    { name: "Cobalt Classic", bg: "#ecece6", tileBg: "#cccabf", face: "#1e3d6b", shadow: "#7ba2cc", highlight: "#edd5b2" },
-    { name: "Art Deco Navy", bg: "#e5dec9", tileBg: "#ccc2ad", face: "#162a45", shadow: "#c98f3c", highlight: "#faebcf" },
-    { name: "Victorian Sage", bg: "#ece7db", tileBg: "#d0c6b3", face: "#3b5842", shadow: "#b2624f", highlight: "#ebd4b0" },
-    { name: "Tuscan Hearth", bg: "#ece3d3", tileBg: "#cca896", face: "#872b22", shadow: "#4d3936", highlight: "#dec08f" },
-    { name: "Mid-Century Olive", bg: "#e4ded2", tileBg: "#cdbfac", face: "#4f5d2f", shadow: "#8b5a2b", highlight: "#ebd09f" },
-    { name: "Retro Flamingo", bg: "#ebdcd3", tileBg: "#cca99c", face: "#d46a78", shadow: "#405d6b", highlight: "#fcedc0" },
-    // ── Vietnamese Encaustic Palettes (inspired by the 12 tile photo) ──
-    { name: "🌺 Saigon Navy",        bg: "#e8e0d5", tileBg: "#c5bfb0", face: "#1e3a5f", shadow: "#7faabf", highlight: "#d4b48c" },
-    { name: "🌺 Hội An Terracotta",  bg: "#f0e5d8", tileBg: "#d4a88a", face: "#b85230", shadow: "#5a8a6a", highlight: "#f0d090" },
-    { name: "🌺 Indochine Gold",     bg: "#e8dcc5", tileBg: "#c0a870", face: "#1a2d4a", shadow: "#c08828", highlight: "#f0e0a8" },
-    { name: "🌺 Đà Lạt Coral",      bg: "#f5e5e0", tileBg: "#d4a09a", face: "#c03858", shadow: "#e87050", highlight: "#fce4b0" },
-    { name: "🌺 Hanoi Rosette",     bg: "#dde8f0", tileBg: "#a8c5d8", face: "#185878", shadow: "#c8a030", highlight: "#e8f2f8" },
-    { name: "🌺 Mekong Baroque",    bg: "#ede8d5", tileBg: "#c5b082", face: "#4a2808", shadow: "#3a8880", highlight: "#e8d0a0" }
+/* ------------------------------------------------------------
+   Curated palettes
+   ------------------------------------------------------------ */
+const BUILTIN_PRESETS = [
+    { name: 'Cobalt Classic', bg: '#ecece6', tileBg: '#cccabf', face: '#1e3d6b', shadow: '#7ba2cc', highlight: '#edd5b2' },
+    { name: 'Art Deco Navy', bg: '#e5dec9', tileBg: '#ccc2ad', face: '#162a45', shadow: '#c98f3c', highlight: '#faebcf' },
+    { name: 'Victorian Sage', bg: '#ece7db', tileBg: '#d0c6b3', face: '#3b5842', shadow: '#b2624f', highlight: '#ebd4b0' },
+    { name: 'Tuscan Hearth', bg: '#ece3d3', tileBg: '#cca896', face: '#872b22', shadow: '#4d3936', highlight: '#dec08f' },
+    { name: 'Mid-Century Olive', bg: '#e4ded2', tileBg: '#cdbfac', face: '#4f5d2f', shadow: '#8b5a2b', highlight: '#ebd09f' },
+    { name: 'Retro Flamingo', bg: '#ebdcd3', tileBg: '#cca99c', face: '#d46a78', shadow: '#405d6b', highlight: '#fcedc0' },
+    { name: 'Saigon Navy', bg: '#e8e0d5', tileBg: '#c5bfb0', face: '#1e3a5f', shadow: '#7faabf', highlight: '#d4b48c' },
+    { name: 'Hội An Terracotta', bg: '#f0e5d8', tileBg: '#d4a88a', face: '#b85230', shadow: '#5a8a6a', highlight: '#f0d090' },
+    { name: 'Indochine Gold', bg: '#e8dcc5', tileBg: '#c0a870', face: '#1a2d4a', shadow: '#c08828', highlight: '#f0e0a8' },
+    { name: 'Đà Lạt Coral', bg: '#f5e5e0', tileBg: '#d4a09a', face: '#c03858', shadow: '#e87050', highlight: '#fce4b0' },
+    { name: 'Hanoi Rosette', bg: '#dde8f0', tileBg: '#a8c5d8', face: '#185878', shadow: '#c8a030', highlight: '#e8f2f8' },
+    { name: 'Mekong Baroque', bg: '#ede8d5', tileBg: '#c5b082', face: '#4a2808', shadow: '#3a8880', highlight: '#e8d0a0' }
 ];
 
-// Helper: Show Toast Notification
-function showToast(message) {
-    toastNotification.textContent = message;
-    toastNotification.classList.add('show');
-    setTimeout(() => { toastNotification.classList.remove('show'); }, 3000);
-}
+let customPresets = [];
 
+function allPresets() { return BUILTIN_PRESETS.concat(customPresets); }
+
+/* ---- engine.js ---- */
+// Build a single-colour stencil from an image.
+// Transparent artwork keeps its own alpha; opaque artwork (JPEG, white-background
+// PNG) is keyed out by luminance so the mark survives instead of becoming a block.
 function createColorMask(img, color) {
+    const MAX = 2048;
+    const ratio = Math.min(1, MAX / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * ratio));
+    const h = Math.max(1, Math.round(img.height * ratio));
+
     const mCanvas = document.createElement('canvas');
-    mCanvas.width = img.width;
-    mCanvas.height = img.height;
-    const mCtx = mCanvas.getContext('2d');
-    mCtx.drawImage(img, 0, 0);
-    mCtx.globalCompositeOperation = 'source-in';
-    mCtx.fillStyle = color;
-    mCtx.fillRect(0, 0, mCanvas.width, mCanvas.height);
+    mCanvas.width = w;
+    mCanvas.height = h;
+    const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+    mCtx.drawImage(img, 0, 0, w, h);
+
+    const imgData = mCtx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    let hasAlpha = false;
+    for (let i = 3; i < d.length; i += 4) {
+        if (d[i] < 250) { hasAlpha = true; break; }
+    }
+
+    const rgb = color.match(/\d+/g).map(Number);
+    // Luminance keying: map near-white to fully transparent and near-black to
+    // fully opaque, so white-background exports (JPEG, flattened PNG) do not
+    // become a solid block of tiles.
+    const BLACK_POINT = 28;
+    const WHITE_POINT = 232;
+    for (let i = 0; i < d.length; i += 4) {
+        const a = d[i + 3] / 255;
+        let alpha;
+        if (hasAlpha) {
+            alpha = a;
+        } else {
+            const lum = Math.min(d[i], d[i + 1], d[i + 2]);
+            alpha = Math.max(0, Math.min(1, (WHITE_POINT - lum) / (WHITE_POINT - BLACK_POINT)));
+            if (alpha < 0.06) alpha = 0;
+        }
+        d[i] = rgb[0];
+        d[i + 1] = rgb[1];
+        d[i + 2] = rgb[2];
+        d[i + 3] = Math.round(255 * alpha);
+    }
+    mCtx.putImageData(imgData, 0, 0);
     return mCanvas;
 }
 
@@ -147,21 +333,25 @@ function hexToHsl(hex) {
     return { h: h * 360, s: s * 100, l: l * 100 };
 }
 
-// Generate slight color shift
+// Generate slight color shift. Accepts hex only � hsl() strings from the border
+// patterns are passed through untouched, otherwise hexToHsl() would produce NaN.
 function getVariantColor(hex, variancePercent) {
-    if (variancePercent === 0) return hex;
+    if (variancePercent === 0 || typeof hex !== 'string' || hex.charAt(0) !== '#') return hex;
     const hsl = hexToHsl(hex);
-    const hVar = (Math.random() - 0.5) * (variancePercent * 1.5);
-    const sVar = (Math.random() - 0.5) * (variancePercent * 2.0);
-    const lVar = (Math.random() - 0.5) * (variancePercent * 2.0);
+    const hVar = (rng() - 0.5) * (variancePercent * 1.5);
+    const sVar = (rng() - 0.5) * (variancePercent * 2.0);
+    const lVar = (rng() - 0.5) * (variancePercent * 2.0);
     let h = Math.max(0, Math.min(360, hsl.h + hVar));
     let s = Math.max(0, Math.min(100, hsl.s + sVar));
     let l = Math.max(0, Math.min(100, hsl.l + lVar));
     return `hsl(${h.toFixed(1)}, ${s.toFixed(1)}%, ${l.toFixed(1)}%)`;
 }
 
-// Render sand grain noise onto grout background
-function createNoisePattern(colorHex) {
+// Render sand grain noise onto grout background.
+// The 128x128 texture is cached per colour � it used to be rebuilt every frame.
+let noiseCache = { key: null, pattern: null };
+function createNoisePattern(colorHex, hostCtx) {
+    if (noiseCache.key === colorHex && noiseCache.pattern) return noiseCache.pattern;
     const noiseCanvas = document.createElement('canvas');
     noiseCanvas.width = 128; noiseCanvas.height = 128;
     const nCtx = noiseCanvas.getContext('2d');
@@ -169,13 +359,15 @@ function createNoisePattern(colorHex) {
     const imgData = nCtx.getImageData(0, 0, 128, 128);
     const data = imgData.data;
     for (let i = 0; i < data.length; i += 4) {
-        const noise = (Math.random() - 0.5) * 12;
+        const noise = (rng() - 0.5) * 12;
         data[i] = Math.max(0, Math.min(255, data[i] + noise));
         data[i+1] = Math.max(0, Math.min(255, data[i+1] + noise));
         data[i+2] = Math.max(0, Math.min(255, data[i+2] + noise));
     }
     nCtx.putImageData(imgData, 0, 0);
-    return ctx.createPattern(noiseCanvas, 'repeat');
+    const pattern = hostCtx.createPattern(noiseCanvas, 'repeat');
+    noiseCache = { key: colorHex, pattern };
+    return pattern;
 }
 
 // ============================================================
@@ -186,7 +378,7 @@ function getBorderVariant(x, y, tileSize) {
     const col = Math.floor(x / tileSize);
     const row = Math.floor(y / tileSize);
     const hash = Math.abs(Math.sin(col * 12.9898 + row * 78.233) * 43758.5453) % 1;
-    const hsl = hexToHsl(subwayBorderColorPicker.value);
+    const hsl = hexToHsl(palette.border);
     let hShift = 0, lShift = 0;
     if (hash < 0.35) { hShift = -4; lShift = -5; }
     else if (hash < 0.7) { hShift = 4; lShift = 5; }
@@ -197,7 +389,7 @@ function getBorderVariant(x, y, tileSize) {
 }
 
 function getBellOrnamentColor(relX, relY) {
-    const gold = '#cca05a', green = '#1a3b2b', cream = subwayHeaderColorPicker.value;
+    const gold = '#cca05a', green = '#1a3b2b', cream = palette.accent;
     if (relY === 0 || relY === 5) return cream;
     if (relY === 1) return relX === 2 ? green : cream;
     if (relY === 2) { if (relX === 2) return gold; if (relX === 1 || relX === 3) return green; return cream; }
@@ -228,7 +420,7 @@ function sampleTextColor(data, x, y, canvasWidth, canvasHeight, is3DMode, faceCo
 // PATTERN 1: NYC SUBWAY MOSAIC
 // ============================================================
 function getSubwayTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
-    const bandC = subwayBandColorPicker.value, accentC = subwayHeaderColorPicker.value;
+    const bandC = palette.band, accentC = palette.accent;
     if (y >= tbYs && y < tbYe) {
         const col = Math.floor(x / ts), totalCols = Math.floor(cw / ts);
         const sp = Math.max(3, Math.min(6, Math.floor(totalCols * 0.06)));
@@ -268,7 +460,7 @@ function getSubwayTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe
 // PATTERN 2: GREEK KEY MEANDER
 // ============================================================
 function getGreekKeyTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
-    const borderC = subwayBorderColorPicker.value, accentC = subwayHeaderColorPicker.value, bandC = subwayBandColorPicker.value;
+    const borderC = palette.border, accentC = palette.accent, bandC = palette.band;
     if (y >= tbYs && y < tbYe) {
         const tc = sampleTextColor(data, x, y, cw, ch, is3D, fc, sc, hc);
         return tc !== null ? tc : bandC;
@@ -297,7 +489,7 @@ function getGreekKeyTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, bot
 // PATTERN 3: ART DECO GEOMETRIC
 // ============================================================
 function getArtDecoTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
-    const borderC = subwayBorderColorPicker.value, accentC = subwayHeaderColorPicker.value, bandC = subwayBandColorPicker.value;
+    const borderC = palette.border, accentC = palette.accent, bandC = palette.band;
     if (y >= tbYs && y < tbYe) {
         const col = Math.floor(x / ts), totalCols = Math.floor(cw / ts);
         const sw = Math.max(2, Math.floor(totalCols * 0.03));
@@ -337,7 +529,7 @@ function getArtDecoTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botY
 // PATTERN 4: VICTORIAN FLOURISH
 // ============================================================
 function getVictorianTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
-    const borderC = subwayBorderColorPicker.value, accentC = subwayHeaderColorPicker.value, bandC = subwayBandColorPicker.value;
+    const borderC = palette.border, accentC = palette.accent, bandC = palette.band;
     if (y >= tbYs && y < tbYe) {
         const col = Math.floor(x / ts), totalCols = Math.floor(cw / ts);
         const rw = Math.max(2, Math.floor(totalCols * 0.04));
@@ -392,7 +584,7 @@ function getVictorianTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, bo
 
 // Returns base tile color for the border zone (motif overlay drawn separately)
 function getVietnameseTileColor(x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, botYe, ts, bRows, is3D, fc, sc, hc, bg) {
-    const bandC = subwayBandColorPicker.value;
+    const bandC = palette.band;
     // Text band: sample text color as usual
     if (y >= tbYs && y < tbYe) {
         const tc = sampleTextColor(data, x, y, cw, ch, is3D, fc, sc, hc);
@@ -688,10 +880,10 @@ function drawVietnameseMotif(tCtx, tx, ty, cs, motifIdx, bgC, priC, secC, accC) 
 function renderVietnameseBands(targetCtx, topYStart, tbYStart, tbYEnd, botYEnd, cw, bandH, groutSize) {
     if (bandH < 12) return; // too thin to draw anything useful
     const cs   = bandH;   // each Vietnamese tile = square with side = full band height
-    const priC = subwayBorderColorPicker.value;
-    const secC = subwayBandColorPicker.value;
-    const accC = subwayHeaderColorPicker.value;
-    const bgC  = bgColorPicker.value;
+    const priC = palette.border;
+    const secC = palette.band;
+    const accC = palette.accent;
+    const bgC  = palette.bg;
 
     // Draw top band, then bottom band
     const bands = [
@@ -877,20 +1069,38 @@ function getBorderTileColor(pat, x, y, data, cw, ch, cx, cy, tbYs, tbYe, topYs, 
 // TEXT WRAPPING & DRAWING
 // ============================================================
 function wrapText(context, text, maxWidth) {
-    const paragraphs = text.split('\n');
-    let lines = [];
-    for (let p = 0; p < paragraphs.length; p++) {
-        let words = paragraphs[p].split(' ');
-        let currentLine = words[0] || '';
-        for (let i = 1; i < words.length; i++) {
-            let word = words[i];
-            let width = context.measureText(currentLine + " " + word).width;
-            if (width < maxWidth) { currentLine += " " + word; }
-            else { lines.push(currentLine); currentLine = word; }
+    const paragraphs = String(text).replace(/\r/g, '').split('\n');
+    const lines = [];
+    for (const para of paragraphs) {
+        if (para === '') { lines.push(''); continue; }
+        let current = '';
+        for (const word of para.split(' ')) {
+            const candidate = current ? current + ' ' + word : word;
+            if (!current || context.measureText(candidate).width <= maxWidth) {
+                current = candidate;
+            } else {
+                lines.push(current);
+                current = word;
+            }
         }
-        lines.push(currentLine);
+        lines.push(current);
     }
-    return lines;
+    // Force-break any word wider than the measure, so nothing is clipped off-canvas.
+    return lines.flatMap(line => {
+        if (context.measureText(line).width <= maxWidth) return [line];
+        const out = [];
+        let chunk = '';
+        for (const ch of Array.from(line)) {
+            if (chunk && context.measureText(chunk + ch).width > maxWidth) {
+                out.push(chunk);
+                chunk = ch;
+            } else {
+                chunk += ch;
+            }
+        }
+        out.push(chunk);
+        return out;
+    });
 }
 
 function drawTextLineOrSpaced(targetCtx, text, x, y, spacing, rotation) {
@@ -898,7 +1108,7 @@ function drawTextLineOrSpaced(targetCtx, text, x, y, spacing, rotation) {
     targetCtx.save();
     targetCtx.translate(x, y);
     targetCtx.rotate(rotation * Math.PI / 180);
-    const chars = text.split('');
+    const chars = Array.from(text);
     const charWidths = chars.map(c => targetCtx.measureText(c).width);
     const totalWidth = charWidths.reduce((a, b) => a + b, 0) + (chars.length - 1) * spacing;
     let cx = -totalWidth / 2;
@@ -921,6 +1131,7 @@ function drawSquareTile(targetCtx, x, y, size, color, bevelDepth, useLighting) {
     }
 }
 function drawCircleTile(targetCtx, cx, cy, r, color, bevelDepth, useLighting) {
+    if (!(r > 0)) return;
     targetCtx.beginPath(); targetCtx.arc(cx, cy, r, 0, Math.PI * 2); targetCtx.fillStyle = color; targetCtx.fill();
     if (useLighting && bevelDepth > 0) {
         targetCtx.save();
@@ -961,473 +1172,1733 @@ function drawDiamondTile(targetCtx, cx, cy, r, color, bevelDepth, useLighting) {
     }
 }
 
-// ============================================================
-// CORE ENGINE: RENDER
-// ============================================================
-function renderMosaic() {
-    const startTime = performance.now();
-    const text = textInput.value || " ";
-    const fontFace = textFontSelect.value;
-    const fontScale = parseFloat(fontScaleInput.value) / 100;
-    const letterSpacing = parseInt(letterSpacingInput.value);
-    const textRotation = parseInt(textRotationInput.value);
-    const style = tileStyleSelect.value;
-    const tileSize = parseInt(tileSizeInput.value);
-    const groutSize = parseFloat(groutSizeInput.value);
-    const bevelDepth = parseFloat(bevelDepthInput.value);
-    const tileBgColor = bgColorPicker.value;
-    const groutColor = tileBgColorPicker.value;
-    const faceColor = faceColorPicker.value;
-    const shadowColor = shadowColorPicker.value;
-    const highlightColor = highlightColorPicker.value;
-    const colorVariance = parseInt(colorVarianceInput.value);
-    const useGroutNoise = groutNoiseCheckbox.checked;
-    const useTileShading = tileShadingCheckbox.checked;
-    const canvasWidth = parseInt(canvasWidthInput.value) || 900;
-    const canvasHeight = parseInt(canvasHeightInput.value) || 350;
-    const autoHeight = autoHeightCheckbox.checked;
-    const borderPattern = borderPatternSelect.value;
-    const hasBorder = borderPattern !== 'none';
-    const showText = showTextCheckbox.checked;
+/* ---- app-tail.js ---- */
+/* ============================================================
+   SCENE MEASUREMENT
+   Every pixel value is multiplied by `k` so the same scene can be
+   painted at 1x for the screen and 8x for export, using identical
+   layout maths and identical (seeded) tile variation.
+   ============================================================ */
 
-    const contentType = contentTypeSelect.value;
-    const logoScale = parseFloat(logoScaleInput.value) / 100;
+function logoMetrics(S, W, k) {
+    if (S.mode !== 'logo' || !loadedLogoImage) return null;
+    const fit = Math.min(1, (W * 0.72) / loadedLogoImage.width);
+    const unit = fit * (S.logoScale / 100);
+    return { unit, w: loadedLogoImage.width * unit, h: loadedLogoImage.height * unit };
+}
 
-    const is3DMode = (style === 'beveled');
-    if (is3DMode) { shadowGroup.classList.remove('disabled'); highlightGroup.classList.remove('disabled'); }
-    else { shadowGroup.classList.add('disabled'); highlightGroup.classList.add('disabled'); }
-    tileShadingGroup.style.display = is3DMode ? 'flex' : 'none';
-    borderSettingsGroup.style.display = hasBorder ? 'flex' : 'none';
+function measureScene(S, k) {
+    const style = S.tileStyle;
+    const ts = S.tileSize * k;
+    const gs = S.grout * k;
+    const bd = S.bevel * k;
+    const W = Math.max(1, Math.round(S.width * k));
 
-    const isStyle1 = (style === 'square');
-    const baseFontSize = (isStyle1 ? 110 : 100) * fontScale;
-    const lineHeight = (isStyle1 ? 120 : 110) * fontScale;
-    const weight = (fontFace.includes('Times New Roman') || fontFace.includes('Times')) ? 'bold' : '900';
-    const fontString = `${weight} ${baseFontSize}px ${fontFace}`;
+    const isStyle1 = style === 'square';
+    const baseFont = (isStyle1 ? 110 : 100) * (S.fontScale / 100) * k;
+    const lineH = (isStyle1 ? 120 : 110) * (S.fontScale / 100) * k;
+    const weight = fontWeightFor(S.font);
+    const fontString = `${weight} ${baseFont}px ${S.font}`;
+    const padding = 60 * k;
+
     hiddenCtx.font = fontString;
-    const padding = 60;
-    const lines = wrapText(hiddenCtx, text, canvasWidth - padding);
-    const totalTextHeight = lines.length * lineHeight;
+    const lines = wrapText(hiddenCtx, S.text && S.text.length ? S.text : ' ', Math.max(20, W - padding));
+    const totalTextH = lines.length * lineH;
 
-    let contentHeight = totalTextHeight;
-    if (contentType === 'logo' && loadedLogoImage) {
-        contentHeight = loadedLogoImage.height * logoScale;
-    }
+    const logo = logoMetrics(S, W, k);
+    const contentH = logo ? logo.h : totalTextH;
 
-    // Responsive border rows — track both width and height
+    const hasBorder = S.border && S.border !== 'none';
     let borderRows = 0;
     if (hasBorder) {
-        const widthBased = Math.max(4, Math.min(14, Math.round(canvasWidth / tileSize * 0.1)));
-        if (autoHeight) {
+        const widthBased = Math.max(4, Math.min(14, Math.round((W / ts) * 0.1)));
+        if (S.autoHeight) {
             borderRows = widthBased;
         } else {
-            // Manual height: grow borders to fill available vertical space
-            const availableSpace = Math.max(0, canvasHeight - contentHeight - tileSize * 4);
-            const heightBased = Math.floor(availableSpace / (2 * tileSize));
+            const availableSpace = Math.max(0, (S.height * k) - contentH - ts * 4);
+            const heightBased = Math.floor(availableSpace / (2 * ts));
             borderRows = Math.max(widthBased, Math.min(28, heightBased));
         }
     }
-    const borderHeight = borderRows * tileSize;
-    const layoutPadding = hasBorder ? (borderHeight * 2 + tileSize * 4) : (padding * 2);
-    const requiredCanvasHeight = autoHeight ? Math.max(350, contentHeight + layoutPadding) : canvasHeight;
+    const borderH = borderRows * ts;
+    const layoutPadding = hasBorder ? (borderH * 2 + ts * 4) : (padding * 2);
+    const offsetAllowance = S.autoHeight ? Math.abs(S.textY) * 2 * k : 0;
+    const H = Math.max(1, Math.round(S.autoHeight ? Math.max(350 * k, contentH + layoutPadding + offsetAllowance) : S.height * k));
 
-    if (canvas.width !== canvasWidth || canvas.height !== requiredCanvasHeight) {
-        canvas.width = canvasWidth; canvas.height = requiredCanvasHeight;
-        hiddenCanvas.width = canvasWidth; hiddenCanvas.height = requiredCanvasHeight;
-        if (requiredCanvasHeight > parseInt(canvasHeightInput.max)) canvasHeightInput.max = Math.ceil(requiredCanvasHeight);
-        canvasHeightInput.value = Math.round(requiredCanvasHeight);
-        canvasResIndicator.textContent = `${canvasWidth} x ${Math.round(requiredCanvasHeight)}`;
-        syncAllSliderDisplays();
+    return {
+        W, H, ts, gs, bd, k, padding, isStyle1, baseFont, lineH, weight, fontString,
+        lines, totalTextH, logo, contentH, hasBorder, borderRows, borderH
+    };
+}
+
+/* ============================================================
+   CORE PAINT
+   ============================================================ */
+let rasterCache = null;
+
+function paint(S, k, out, oCtx, hid, hCtx) {
+    const t0 = performance.now();
+    resetRandom(SEED);
+    palette = {
+        bg: S.bg, tileBg: S.tileBg, face: S.face, shadow: S.shadow, highlight: S.highlight,
+        band: S.band, border: S.borderColor, accent: S.borderAccent
+    };
+
+    const M = measureScene(S, k);
+    const {
+        W, H, ts, gs, bd, padding, isStyle1, baseFont, lineH,
+        lines, totalTextH, logo, contentH, hasBorder, borderRows, borderH
+    } = M;
+
+    const style = S.tileStyle;
+    const is3D = style === 'beveled';
+    const useShading = S.shading || is3D;
+    const variance = S.variance;
+
+    if (out.width !== W || out.height !== H) {
+        out.width = W;
+        out.height = H;
     }
+    if (hid.width !== W || hid.height !== H) {
+        hid.width = W;
+        hid.height = H;
+    }
+    // Resizing a canvas resets its context state.
+    hCtx.setTransform(1, 0, 0, 1, 0, 0);
+    hCtx.clearRect(0, 0, W, H);
+    hCtx.font = M.fontString;
+    hCtx.textBaseline = 'middle';
+    hCtx.textAlign = 'center';
 
-    hiddenCtx.clearRect(0, 0, canvasWidth, requiredCanvasHeight);
-    const centerX = (canvasWidth / 2) + textX;
-    const centerY = (requiredCanvasHeight / 2) + textY;
+    const centerX = W / 2 + S.textX * k;
+    const centerY = H / 2 + S.textY * k;
+    const spacing = S.letterSpacing * k;
+    const rotation = S.rotation;
 
-    if (showText) {
-        if (contentType === 'logo' && loadedLogoImage) {
-            const lw = loadedLogoImage.width * logoScale;
-            const lh = loadedLogoImage.height * logoScale;
-            const drawMask = (maskCanvas, xOffset, yOffset) => {
-                if (!maskCanvas) return;
-                hiddenCtx.save();
-                hiddenCtx.translate(centerX + xOffset, centerY + yOffset);
-                hiddenCtx.rotate(textRotation * Math.PI / 180);
-                hiddenCtx.drawImage(maskCanvas, -lw / 2, -lh / 2, lw, lh);
-                hiddenCtx.restore();
-            };
+    /* ---- rasterise the content into colour channels ---- */
+    // Cached on every input that changes the bitmap, so dragging a colour slider
+    // does not re-rasterise the type on every frame.
+    const rasterKeyStr = [
+        S.text, S.font, S.fontScale, S.letterSpacing, S.rotation, S.align,
+        S.showContent, S.mode, S.logoScale, S.textX, S.textY, S.width,
+        S.tileStyle, k, W, H
+    ].join('\u0001');
 
-            if (is3DMode) {
-                drawMask(logoMaskBlue, -3, -3);
-                for (let i = 1; i <= 8; i++) {
-                    drawMask(logoMaskGreen, -i * 1.5, i * 1.5);
-                }
-                drawMask(logoMaskRed, 0, 0);
-            } else {
-                drawMask(logoMaskRed, 0, 0);
-            }
-        } else {
-            hiddenCtx.font = fontString; hiddenCtx.textBaseline = 'middle'; hiddenCtx.textAlign = 'center';
-            let startY = (requiredCanvasHeight - totalTextHeight) / 2 + (lineHeight / 2) + textY;
-            lines.forEach((line, index) => {
-                const currentY = startY + (index * lineHeight);
-                if (is3DMode) {
-                    hiddenCtx.fillStyle = 'rgb(0, 0, 255)'; drawTextLineOrSpaced(hiddenCtx, line, centerX - 3, currentY - 3, letterSpacing, textRotation);
-                    hiddenCtx.fillStyle = 'rgb(0, 255, 0)'; for (let i = 1; i <= 8; i++) drawTextLineOrSpaced(hiddenCtx, line, centerX - (i * 1.5), currentY + (i * 1.5), letterSpacing, textRotation);
-                    hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+    let data;
+    if (rasterCache && rasterCache.key === rasterKeyStr) {
+        data = rasterCache.data;
+    } else {
+        if (S.showContent) {
+            if (logo && loadedLogoImage) {
+                const drawMask = (maskCanvas, xOffset, yOffset) => {
+                    if (!maskCanvas) return;
+                    hCtx.save();
+                    hCtx.translate(centerX + xOffset, centerY + yOffset);
+                    hCtx.rotate(rotation * Math.PI / 180);
+                    hCtx.drawImage(maskCanvas, -logo.w / 2, -logo.h / 2, logo.w, logo.h);
+                    hCtx.restore();
+                };
+                if (is3D) {
+                    drawMask(logoMaskBlue, -3 * k, -3 * k);
+                    for (let i = 1; i <= 8; i++) drawMask(logoMaskGreen, -i * 1.5 * k, i * 1.5 * k);
+                    drawMask(logoMaskRed, 0, 0);
                 } else {
-                    hiddenCtx.fillStyle = 'rgb(255, 0, 0)'; drawTextLineOrSpaced(hiddenCtx, line, centerX, currentY, letterSpacing, textRotation);
+                    drawMask(logoMaskRed, 0, 0);
                 }
-            });
+            } else {
+                const lineWidths = lines.map(line => hCtx.measureText(line).width + Math.max(0, line.length - 1) * spacing);
+                const widest = lineWidths.length ? Math.max.apply(null, lineWidths) : 0;
+                const blockTop = -totalTextH / 2;
+
+                // The whole block is rotated about its centre, not each line.
+                const drawPass = (color, dx, dy) => {
+                    hCtx.save();
+                    hCtx.translate(centerX + dx, centerY + dy);
+                    hCtx.rotate(rotation * Math.PI / 180);
+                    hCtx.fillStyle = color;
+                    lines.forEach((line, i) => {
+                        let offset = 0;
+                        if (S.align === 'left') offset = (lineWidths[i] - widest) / 2;
+                        else if (S.align === 'right') offset = (widest - lineWidths[i]) / 2;
+                        const y = blockTop + i * lineH + lineH / 2;
+                        drawTextLineOrSpaced(hCtx, line, offset, y, spacing, 0);
+                    });
+                    hCtx.restore();
+                };
+
+                if (is3D) {
+                    drawPass('rgb(0, 0, 255)', -3 * k, -3 * k);
+                    for (let d = 1; d <= 8; d++) drawPass('rgb(0, 255, 0)', -d * 1.5 * k, d * 1.5 * k);
+                    drawPass('rgb(255, 0, 0)', 0, 0);
+                } else {
+                    drawPass('rgb(255, 0, 0)', 0, 0);
+                }
+            }
         }
+
+        data = hCtx.getImageData(0, 0, W, H).data;
+        rasterCache = { key: rasterKeyStr, data };
     }
 
-    const imageData = hiddenCtx.getImageData(0, 0, canvasWidth, requiredCanvasHeight);
-    const data = imageData.data;
-    if (useGroutNoise) { ctx.fillStyle = createNoisePattern(groutColor); } else { ctx.fillStyle = groutColor; }
-    ctx.fillRect(0, 0, canvasWidth, requiredCanvasHeight);
+    /* ---- grout field ---- */
+    oCtx.setTransform(1, 0, 0, 1, 0, 0);
+    oCtx.globalAlpha = 1;
+    oCtx.fillStyle = S.noise ? createNoisePattern(S.tileBg, oCtx) : S.tileBg;
+    oCtx.fillRect(0, 0, W, H);
+
+    let tilesDrawn = 0;
 
     if (hasBorder) {
-        const textBandHeight = Math.max(tileSize * 8, contentHeight + 40);
+        const textBandHeight = Math.max(ts * 8, contentH + ts * 4);
         const textBandYStart = centerY - textBandHeight / 2;
         const textBandYEnd = centerY + textBandHeight / 2;
-        const TopBorderYStart = textBandYStart - borderHeight;
-        const BottomBorderYEnd = textBandYEnd + borderHeight;
+        const topBorderYStart = textBandYStart - borderH;
+        const bottomBorderYEnd = textBandYEnd + borderH;
 
-        const fieldTileSize = Math.round(tileSize * 2.5);
+        const fieldTileSize = Math.round(ts * 2.5);
+        const fieldColor = () => getVariantColor(S.tileBg, variance);
         let fieldRow = 0;
-        for (let y = TopBorderYStart - fieldTileSize; y > -fieldTileSize; y -= fieldTileSize) {
+        for (let y = topBorderYStart - fieldTileSize; y > -fieldTileSize; y -= fieldTileSize) {
             const ox = (fieldRow % 2 === 1) ? (fieldTileSize / 2) : 0;
-            for (let x = -fieldTileSize; x < canvasWidth + fieldTileSize; x += fieldTileSize) {
-                const ax = x + ox; if (ax > canvasWidth) continue;
-                drawSquareTile(ctx, ax + groutSize, y + groutSize, fieldTileSize - groutSize*2, getVariantColor(tileBgColor, colorVariance), bevelDepth, useTileShading);
+            for (let x = -fieldTileSize; x < W + fieldTileSize; x += fieldTileSize) {
+                const ax = x + ox;
+                if (ax > W) continue;
+                drawSquareTile(oCtx, ax + gs, y + gs, fieldTileSize - gs * 2, fieldColor(), bd, useShading);
+                tilesDrawn++;
             }
             fieldRow++;
         }
         fieldRow = 0;
-        for (let y = BottomBorderYEnd; y < requiredCanvasHeight + fieldTileSize; y += fieldTileSize) {
+        for (let y = bottomBorderYEnd; y < H + fieldTileSize; y += fieldTileSize) {
             const ox = (fieldRow % 2 === 1) ? (fieldTileSize / 2) : 0;
-            for (let x = -fieldTileSize; x < canvasWidth + fieldTileSize; x += fieldTileSize) {
-                const ax = x + ox; if (ax > canvasWidth) continue;
-                drawSquareTile(ctx, ax + groutSize, y + groutSize, fieldTileSize - groutSize*2, getVariantColor(tileBgColor, colorVariance), bevelDepth, useTileShading);
+            for (let x = -fieldTileSize; x < W + fieldTileSize; x += fieldTileSize) {
+                const ax = x + ox;
+                if (ax > W) continue;
+                drawSquareTile(oCtx, ax + gs, y + gs, fieldTileSize - gs * 2, fieldColor(), bd, useShading);
+                tilesDrawn++;
             }
             fieldRow++;
         }
 
         let smallRow = 0;
-        for (let y = TopBorderYStart; y < BottomBorderYEnd; y += tileSize) {
-            for (let x = 0; x < canvasWidth; x += tileSize) {
-                const tc = getBorderTileColor(borderPattern, x, y, data, canvasWidth, requiredCanvasHeight, centerX, centerY, textBandYStart, textBandYEnd, TopBorderYStart, BottomBorderYEnd, tileSize, borderRows, is3DMode, faceColor, shadowColor, highlightColor, tileBgColor);
-                const fc2 = getVariantColor(tc, colorVariance);
-                const tr = (tileSize / 2) - groutSize, tcx = x + tileSize/2, tcy = y + tileSize/2;
-                if (style === 'square' || style === 'beveled') drawSquareTile(ctx, x + groutSize, y + groutSize, tileSize - groutSize*2, fc2, bevelDepth, useTileShading);
-                else if (style === 'circle') drawCircleTile(ctx, tcx, tcy, tr, fc2, bevelDepth, useTileShading);
-                else if (style === 'hexagon') drawHexagonTile(ctx, tcx, tcy, tr + 1, fc2, bevelDepth, useTileShading);
-                else if (style === 'triangle') { const col = Math.floor(x / tileSize); drawTriangleTile(ctx, tcx, tcy, tr + 1, fc2, bevelDepth, useTileShading, (smallRow + col) % 2 === 0); }
-                else if (style === 'diamond') drawDiamondTile(ctx, tcx, tcy, (tileSize/2) - groutSize, fc2, bevelDepth, useTileShading);
+        for (let y = topBorderYStart; y < bottomBorderYEnd; y += ts) {
+            for (let x = 0; x < W; x += ts) {
+                // The encaustic motif layer paints its own opaque cells over both bands.
+                if (S.border === 'vietnamese' && (y < textBandYStart || y >= textBandYEnd)) continue;
+                const tc = getBorderTileColor(
+                    S.border, x, y, data, W, H, centerX, centerY,
+                    textBandYStart, textBandYEnd, topBorderYStart, bottomBorderYEnd,
+                    ts, borderRows, is3D, S.face, S.shadow, S.highlight, S.tileBg
+                );
+                const tileColor = getVariantColor(tc, variance);
+                const tr = Math.max(0, (ts / 2) - gs);
+                const tcx = x + ts / 2;
+                const tcy = y + ts / 2;
+                if (style === 'square' || style === 'beveled') {
+                    drawSquareTile(oCtx, x + gs, y + gs, ts - gs * 2, tileColor, bd, useShading);
+                } else if (style === 'circle') {
+                    drawCircleTile(oCtx, tcx, tcy, tr, tileColor, bd, useShading);
+                } else if (style === 'hexagon') {
+                    drawHexagonTile(oCtx, tcx, tcy, tr + k, tileColor, bd, useShading);
+                } else if (style === 'triangle') {
+                    const col = Math.floor(x / ts);
+                    drawTriangleTile(oCtx, tcx, tcy, tr + k, tileColor, bd, useShading, (smallRow + col) % 2 === 0);
+                } else if (style === 'diamond') {
+                    drawDiamondTile(oCtx, tcx, tcy, (ts / 2) - gs, tileColor, bd, useShading);
+                }
+                tilesDrawn++;
             }
             smallRow++;
         }
 
-        // ── Vietnamese Encaustic: draw ornamental tile motifs over the base grid ──
-        if (borderPattern === 'vietnamese') {
-            renderVietnameseBands(ctx, TopBorderYStart, textBandYStart, textBandYEnd, BottomBorderYEnd, canvasWidth, borderHeight, groutSize);
+        if (S.border === 'vietnamese') {
+            renderVietnameseBands(oCtx, topBorderYStart, textBandYStart, textBandYEnd, bottomBorderYEnd, W, borderH, gs);
         }
     } else {
-        let stepX = tileSize, stepY = tileSize;
-        if (style === 'circle' || style === 'hexagon') stepY = tileSize * 0.866;
-        else if (style === 'triangle') { stepX = tileSize / 2; stepY = tileSize * 0.866; }
-        else if (style === 'diamond') { stepX = tileSize * 0.82; stepY = tileSize / 2; }
+        let stepX = ts, stepY = ts;
+        if (style === 'circle' || style === 'hexagon') stepY = ts * 0.866;
+        else if (style === 'triangle') { stepX = ts / 2; stepY = ts * 0.866; }
+        else if (style === 'diamond') { stepX = ts * 0.82; stepY = ts / 2; }
+
         let row = 0;
-        for (let y = 0; y < requiredCanvasHeight; y += stepY) {
-            let offsetX = (row % 2 === 1 && (style === 'circle' || style === 'hexagon')) ? (tileSize / 2) : 0;
-            for (let x = 0; x < canvasWidth; x += stepX) {
-                const ax = x + offsetX; if (ax > canvasWidth) continue;
-                const si = (Math.floor(y) * canvasWidth + Math.floor(ax)) * 4;
-                const r = data[si], g = data[si+1], b = data[si+2], a = data[si+3];
-                let tc = tileBgColor;
-                if (a > 50) { if (is3DMode) { if (r>g&&r>b) tc=faceColor; else if(g>r&&g>b) tc=shadowColor; else if(b>r&&b>g) tc=highlightColor; else tc=faceColor; } else tc=faceColor; }
-                const fc2 = getVariantColor(tc, colorVariance);
-                const radius = (tileSize/2) - groutSize, cx = ax + tileSize/2, cy = y + tileSize/2;
-                if (style === 'square' || style === 'beveled') drawSquareTile(ctx, ax + groutSize, y + groutSize, tileSize - groutSize*2, fc2, bevelDepth, useTileShading);
-                else if (style === 'circle') drawCircleTile(ctx, cx, cy, radius, fc2, bevelDepth, useTileShading);
-                else if (style === 'hexagon') drawHexagonTile(ctx, cx, cy, radius + 1, fc2, bevelDepth, useTileShading);
-                else if (style === 'triangle') { const col = Math.floor(x / stepX); drawTriangleTile(ctx, cx, cy, radius + 1, fc2, bevelDepth, useTileShading, (row + col) % 2 === 0); }
-                else if (style === 'diamond') drawDiamondTile(ctx, cx, cy, (tileSize/2) - groutSize, fc2, bevelDepth, useTileShading);
+        for (let y = 0; y < H; y += stepY) {
+            const offsetX = (row % 2 === 1 && (style === 'circle' || style === 'hexagon')) ? (ts / 2) : 0;
+            const diamondOffset = (row % 2 === 1 && style === 'diamond') ? (ts * 0.41) : 0;
+            for (let x = 0; x < W; x += stepX) {
+                const ax = x + offsetX + diamondOffset;
+                if (ax > W) continue;
+                const si = (Math.floor(y) * W + Math.floor(ax)) * 4;
+                const r = data[si], g = data[si + 1], b = data[si + 2], a = data[si + 3];
+                let tc = S.tileBg;
+                if (a > 50) {
+                    if (is3D) {
+                        if (r > g && r > b) tc = S.face;
+                        else if (g > r && g > b) tc = S.shadow;
+                        else if (b > r && b > g) tc = S.highlight;
+                        else tc = S.face;
+                    } else {
+                        tc = S.face;
+                    }
+                }
+                const tileColor = getVariantColor(tc, variance);
+                const radius = Math.max(0, (ts / 2) - gs);
+                const cx = ax + ts / 2;
+                const cy = y + ts / 2;
+                if (style === 'square' || style === 'beveled') {
+                    drawSquareTile(oCtx, ax + gs, y + gs, ts - gs * 2, tileColor, bd, useShading);
+                } else if (style === 'circle') {
+                    drawCircleTile(oCtx, cx, cy, radius, tileColor, bd, useShading);
+                } else if (style === 'hexagon') {
+                    drawHexagonTile(oCtx, cx, cy, radius + k, tileColor, bd, useShading);
+                } else if (style === 'triangle') {
+                    const col = Math.floor(x / stepX);
+                    drawTriangleTile(oCtx, cx, cy, radius + k, tileColor, bd, useShading, (row + col) % 2 === 0);
+                } else if (style === 'diamond') {
+                    drawDiamondTile(oCtx, cx, cy, (ts / 2) - gs, tileColor, bd, useShading);
+                }
+                tilesDrawn++;
             }
             row++;
         }
     }
-    renderTimeIndicator.textContent = `${(performance.now() - startTime).toFixed(0)}ms`;
+
+    /* ---- content bounds, for the drag affordance ---- */
+    let bounds = null;
+    if (S.showContent) {
+        const bw = logo ? logo.w : (() => {
+            hCtx.font = M.fontString;
+            const widths = lines.map(l => hCtx.measureText(l).width + Math.max(0, l.length - 1) * spacing);
+            return widths.length ? Math.max.apply(null, widths) : 0;
+        })();
+        const bh = logo ? logo.h : totalTextH;
+        const rad = rotation * Math.PI / 180;
+        const rw = Math.abs(bw * Math.cos(rad)) + Math.abs(bh * Math.sin(rad));
+        const rh = Math.abs(bw * Math.sin(rad)) + Math.abs(bh * Math.cos(rad));
+        bounds = { x: centerX - rw / 2, y: centerY - rh / 2, w: rw, h: rh };
+    }
+
+    return {
+        W, H, tileCount: tilesDrawn, bounds,
+        renderTime: performance.now() - t0,
+        contentH
+    };
 }
 
-// ============================================================
-// EXPORT SUITE
-// ============================================================
-function generateSVGString() {
-    const text = textInput.value || " ", fontFace = textFontSelect.value, fontScale = parseFloat(fontScaleInput.value)/100;
-    const style = tileStyleSelect.value, tileSize = parseInt(tileSizeInput.value), groutSize = parseFloat(groutSizeInput.value), bevelDepth = parseFloat(bevelDepthInput.value);
-    const tileBgColor = bgColorPicker.value, groutColor = tileBgColorPicker.value, faceColor = faceColorPicker.value, shadowColor = shadowColorPicker.value, highlightColor = highlightColorPicker.value;
-    const colorVariance = parseInt(colorVarianceInput.value), useTileShading = tileShadingCheckbox.checked;
-    const canvasWidth = canvas.width, canvasHeight = canvas.height;
-    const imageData = hiddenCtx.getImageData(0, 0, canvasWidth, canvasHeight), data = imageData.data;
-    let svg = `<?xml version="1.0" encoding="utf-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvasWidth} ${canvasHeight}" width="100%" height="100%">\n  <defs>\n    <linearGradient id="bevel-gloss" x1="0%" y1="0%" x2="100%" y2="100%">\n      <stop offset="0%" stop-color="white" stop-opacity="0.32" />\n      <stop offset="40%" stop-color="white" stop-opacity="0.08" />\n      <stop offset="60%" stop-color="black" stop-opacity="0.0" />\n      <stop offset="100%" stop-color="black" stop-opacity="0.35" />\n    </linearGradient>\n  </defs>\n  <rect width="100%" height="100%" fill="${groutColor}" />\n  <g id="tiles">\n`;
-    const centerX = (canvasWidth/2)+textX, centerY = (canvasHeight/2)+textY;
-    const isStyle1 = (style === 'square'), baseFontSize = (isStyle1 ? 110 : 100)*fontScale, lineHeight = (isStyle1 ? 120 : 110)*fontScale;
-    const weight = (fontFace.includes('Times New Roman')||fontFace.includes('Times')) ? 'bold' : '900';
-    hiddenCtx.font = `${weight} ${baseFontSize}px ${fontFace}`;
-    const lines = wrapText(hiddenCtx, text, canvasWidth - 60), totalTextHeight = lines.length*lineHeight;
-    const contentType = contentTypeSelect.value;
-    const logoScale = parseFloat(logoScaleInput.value) / 100;
-    let contentHeight = totalTextHeight;
-    if (contentType === 'logo' && loadedLogoImage) {
-        contentHeight = loadedLogoImage.height * logoScale;
-    }
+/* ============================================================
+   VIEW RENDER
+   ============================================================ */
+let lastMetrics = null;
+let renderQueued = false;
 
-    const is3DMode = (style === 'beveled'), borderPattern = borderPatternSelect.value, hasBorder = borderPattern !== 'none';
-    const autoHeight = autoHeightCheckbox.checked;
-    let borderRows = 0;
-    if (hasBorder) {
-        const widthBased = Math.max(4, Math.min(14, Math.round(canvasWidth/tileSize*0.1)));
-        if (autoHeight) {
-            borderRows = widthBased;
-        } else {
-            const availableSpace = Math.max(0, canvasHeight - contentHeight - tileSize * 4);
-            const heightBased = Math.floor(availableSpace / (2 * tileSize));
-            borderRows = Math.max(widthBased, Math.min(28, heightBased));
+function renderNow() {
+    const metrics = paint(state, 1, canvas, ctx, hiddenCanvas, hiddenCtx);
+    lastMetrics = metrics;
+    updateStats(metrics);
+    if (typeof updateCanvasLabel === 'function') updateCanvasLabel(metrics);
+    if (typeof refreshExportHint === 'function') refreshExportHint();
+    refreshBounds(metrics.bounds);
+    applyZoom();
+    return metrics;
+}
+
+function requestRender() {
+    if (renderQueued) return;
+    renderQueued = true;
+    requestAnimationFrame(() => {
+        renderQueued = false;
+        renderNow();
+    });
+}
+
+function updateStats(metrics) {
+    const W = metrics.W, H = metrics.H;
+    renderTimeIndicator.textContent = `${metrics.renderTime.toFixed(0)}ms`;
+    canvasResIndicator.textContent = `${W} × ${H}`;
+    if (tileCountIndicator) tileCountIndicator.textContent = `${metrics.tileCount.toLocaleString()} tiles`;
+    if (statusSize) statusSize.textContent = `${W} × ${H} px`;
+    if (statusTiles) statusTiles.textContent = `${metrics.tileCount.toLocaleString()} tiles`;
+    if (state.autoHeight) {
+        if (document.activeElement !== canvasHeightInput) canvasHeightInput.value = H;
+        canvasHeightInput.max = Math.max(1500, H);
+        setOutput('height', H);
+        updateRangeFill(canvasHeightInput);
+    }
+    const empty = !state.showContent || (state.mode === 'text' && !state.text.trim()) || (state.mode === 'logo' && !loadedLogoImage);
+    emptyState.hidden = !empty;
+}
+
+/* ============================================================
+   SVG EXPORT
+   ============================================================ */
+function buildSVG() {
+    resetRandom(SEED);
+    palette = {
+        bg: state.bg, tileBg: state.tileBg, face: state.face, shadow: state.shadow, highlight: state.highlight,
+        band: state.band, border: state.borderColor, accent: state.borderAccent
+    };
+
+    const S = state;
+    const W = canvas.width;
+    const H = canvas.height;
+    const data = hiddenCtx.getImageData(0, 0, W, H).data;
+
+    const ts = S.tileSize;
+    const gs = S.grout;
+    const style = S.tileStyle;
+    const is3D = style === 'beveled';
+    const useShading = S.shading;
+    const variance = S.variance;
+    const border = S.border;
+    const hasBorder = border !== 'none';
+
+    const M = measureScene(S, 1);
+    const borderRows = M.borderRows;
+    const borderH = M.borderH;
+    const contentH = M.contentH;
+    const centerX = W / 2 + S.textX;
+    const centerY = H / 2 + S.textY;
+
+    let svg = `<?xml version="1.0" encoding="utf-8"?>\n`;
+    svg += `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">\n`;
+    svg += `  <title>${escapeHtml(S.docName || 'Mosaic')}</title>\n`;
+    svg += `  <desc>Encaustic mosaic artwork generated with Mosaic System. ${W}×${H} px, ${ts}px tiles.</desc>\n`;
+    svg += `  <defs>\n    <linearGradient id="bevel-gloss" x1="0%" y1="0%" x2="100%" y2="100%">\n      <stop offset="0%" stop-color="white" stop-opacity="0.32" />\n      <stop offset="40%" stop-color="white" stop-opacity="0.08" />\n      <stop offset="60%" stop-color="black" stop-opacity="0.0" />\n      <stop offset="100%" stop-color="black" stop-opacity="0.35" />\n    </linearGradient>\n  </defs>\n`;
+    svg += `  <rect width="${W}" height="${H}" fill="${S.tileBg}" />\n  <g id="tiles">\n`;
+
+    const emitRect = (x, y, sz, c) => {
+        svg += `    <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="${c}" />\n`;
+        if (useShading) svg += `    <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="url(#bevel-gloss)" opacity="0.8" />\n`;
+    };
+    const emitCirc = (cx, cy, r, c) => {
+        svg += `    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" />\n`;
+        if (useShading) svg += `    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="url(#bevel-gloss)" opacity="0.8" />\n`;
+    };
+    const emitPoly = (pts, c) => {
+        svg += `    <polygon points="${pts}" fill="${c}" />\n`;
+        if (useShading) svg += `    <polygon points="${pts}" fill="url(#bevel-gloss)" opacity="0.8" />\n`;
+    };
+    const emitTile = (x, y, size, grout, tileColor, tileStyle, row) => {
+        const r = (size / 2) - grout;
+        const cx = x + size / 2;
+        const cy = y + size / 2;
+        if (tileStyle === 'square' || tileStyle === 'beveled') {
+            emitRect(x + grout, y + grout, size - grout * 2, tileColor);
+        } else if (tileStyle === 'circle') {
+            emitCirc(cx, cy, r, tileColor);
+        } else if (tileStyle === 'hexagon') {
+            const pts = [];
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 3) * i - Math.PI / 6;
+                pts.push(`${(cx + (r + 0.5) * Math.cos(a)).toFixed(1)},${(cy + (r + 0.5) * Math.sin(a)).toFixed(1)}`);
+            }
+            emitPoly(pts.join(' '), tileColor);
+        } else if (tileStyle === 'triangle') {
+            const col = Math.floor(x / size);
+            const up = (row + col) % 2 === 0;
+            const rad = r + 1;
+            const pts = up
+                ? [`${cx.toFixed(1)},${(cy - rad).toFixed(1)}`, `${(cx + rad * 0.866).toFixed(1)},${(cy + rad * 0.5).toFixed(1)}`, `${(cx - rad * 0.866).toFixed(1)},${(cy + rad * 0.5).toFixed(1)}`]
+                : [`${cx.toFixed(1)},${(cy + rad).toFixed(1)}`, `${(cx + rad * 0.866).toFixed(1)},${(cy - rad * 0.5).toFixed(1)}`, `${(cx - rad * 0.866).toFixed(1)},${(cy - rad * 0.5).toFixed(1)}`];
+            emitPoly(pts.join(' '), tileColor);
+        } else if (tileStyle === 'diamond') {
+            const dr = (size / 2) - grout;
+            emitPoly(`${cx.toFixed(1)},${(cy - dr).toFixed(1)} ${(cx + dr * 0.82).toFixed(1)},${cy.toFixed(1)} ${cx.toFixed(1)},${(cy + dr).toFixed(1)} ${(cx - dr * 0.82).toFixed(1)},${cy.toFixed(1)}`, tileColor);
         }
-    }
-    const borderHeight = borderRows*tileSize;
-
-    const emitRect = (sx,sy,sz,c) => { svg += `    <rect x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="${c}" />\n`; if (useTileShading && bevelDepth > 0) svg += `    <rect x="${sx.toFixed(1)}" y="${sy.toFixed(1)}" width="${sz.toFixed(1)}" height="${sz.toFixed(1)}" fill="url(#bevel-gloss)" opacity="0.8" />\n`; };
-    const emitCirc = (cx,cy,r,c) => { svg += `    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}" />\n`; if (useTileShading && bevelDepth > 0) svg += `    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="url(#bevel-gloss)" opacity="0.8" />\n`; };
-    const emitPoly = (pts,c) => { svg += `    <polygon points="${pts}" fill="${c}" />\n`; if (useTileShading && bevelDepth > 0) svg += `    <polygon points="${pts}" fill="url(#bevel-gloss)" opacity="0.8" />\n`; };
-    const emitTile = (x,y,ts,gs,fc2,st,row) => {
-        const r = (ts/2)-gs, cx = x+ts/2, cy = y+ts/2;
-        if (st==='square'||st==='beveled') emitRect(x+gs,y+gs,ts-gs*2,fc2);
-        else if (st==='circle') emitCirc(cx,cy,r,fc2);
-        else if (st==='hexagon') { let p=[]; for(let i=0;i<6;i++){const a=(Math.PI/3)*i-Math.PI/6; p.push(`${(cx+(r+0.5)*Math.cos(a)).toFixed(1)},${(cy+(r+0.5)*Math.sin(a)).toFixed(1)}`);} emitPoly(p.join(' '),fc2); }
-        else if (st==='triangle') { const col=Math.floor(x/ts),up=(row+col)%2===0,rad=r+1; let p=[]; if(up){p.push(`${cx.toFixed(1)},${(cy-rad).toFixed(1)}`);p.push(`${(cx+rad*0.866).toFixed(1)},${(cy+rad*0.5).toFixed(1)}`);p.push(`${(cx-rad*0.866).toFixed(1)},${(cy+rad*0.5).toFixed(1)}`);}else{p.push(`${cx.toFixed(1)},${(cy+rad).toFixed(1)}`);p.push(`${(cx+rad*0.866).toFixed(1)},${(cy-rad*0.5).toFixed(1)}`);p.push(`${(cx-rad*0.866).toFixed(1)},${(cy-rad*0.5).toFixed(1)}`);} emitPoly(p.join(' '),fc2); }
-        else if (st==='diamond') { const dr=(ts/2)-gs; let p=[]; p.push(`${cx.toFixed(1)},${(cy-dr).toFixed(1)}`);p.push(`${(cx+dr*0.82).toFixed(1)},${cy.toFixed(1)}`);p.push(`${cx.toFixed(1)},${(cy+dr).toFixed(1)}`);p.push(`${(cx-dr*0.82).toFixed(1)},${cy.toFixed(1)}`); emitPoly(p.join(' '),fc2); }
     };
 
     if (hasBorder) {
-        const tbH = Math.max(tileSize*8, contentHeight+40), tbYs = centerY-tbH/2, tbYe = centerY+tbH/2;
-        const topYs = tbYs-borderHeight, botYe = tbYe+borderHeight;
-        const fts = Math.round(tileSize*2.5);
+        const tbH = Math.max(ts * 8, contentH + 40);
+        const tbYs = centerY - tbH / 2;
+        const tbYe = centerY + tbH / 2;
+        const topYs = tbYs - borderH;
+        const botYe = tbYe + borderH;
+        const fts = Math.round(ts * 2.5);
+
         let fr = 0;
-        for (let y = topYs-fts; y > -fts; y -= fts) { const ox=(fr%2===1)?(fts/2):0; for(let x=-fts;x<canvasWidth+fts;x+=fts){const ax=x+ox;if(ax>canvasWidth)continue;emitRect(ax+groutSize,y+groutSize,fts-groutSize*2,getVariantColor(tileBgColor,colorVariance));} fr++; }
-        fr=0;
-        for (let y = botYe; y < canvasHeight+fts; y += fts) { const ox=(fr%2===1)?(fts/2):0; for(let x=-fts;x<canvasWidth+fts;x+=fts){const ax=x+ox;if(ax>canvasWidth)continue;emitRect(ax+groutSize,y+groutSize,fts-groutSize*2,getVariantColor(tileBgColor,colorVariance));} fr++; }
-        let sr=0;
-        for (let y = topYs; y < botYe; y += tileSize) { for(let x=0;x<canvasWidth;x+=tileSize){ const tc=getBorderTileColor(borderPattern,x,y,data,canvasWidth,canvasHeight,centerX,centerY,tbYs,tbYe,topYs,botYe,tileSize,borderRows,is3DMode,faceColor,shadowColor,highlightColor,tileBgColor); emitTile(x,y,tileSize,groutSize,getVariantColor(tc,colorVariance),style,sr); } sr++; }
+        for (let y = topYs - fts; y > -fts; y -= fts) {
+            const ox = (fr % 2 === 1) ? (fts / 2) : 0;
+            for (let x = -fts; x < W + fts; x += fts) {
+                const ax = x + ox;
+                if (ax > W) continue;
+                emitRect(ax + gs, y + gs, fts - gs * 2, getVariantColor(S.tileBg, variance));
+            }
+            fr++;
+        }
+        fr = 0;
+        for (let y = botYe; y < H + fts; y += fts) {
+            const ox = (fr % 2 === 1) ? (fts / 2) : 0;
+            for (let x = -fts; x < W + fts; x += fts) {
+                const ax = x + ox;
+                if (ax > W) continue;
+                emitRect(ax + gs, y + gs, fts - gs * 2, getVariantColor(S.tileBg, variance));
+            }
+            fr++;
+        }
 
-        // ── Vietnamese Encaustic: draw ornamental tile motifs in vector SVG ──
-        if (borderPattern === 'vietnamese' && borderHeight >= 12) {
-            const cs = borderHeight;
-            const priC = subwayBorderColorPicker.value;
-            const secC = subwayBandColorPicker.value;
-            const accC = subwayHeaderColorPicker.value;
-            const bgC  = bgColorPicker.value;
+        let sr = 0;
+        for (let y = topYs; y < botYe; y += ts) {
+            for (let x = 0; x < W; x += ts) {
+                const tc = getBorderTileColor(
+                    border, x, y, data, W, H, centerX, centerY,
+                    tbYs, tbYe, topYs, botYe, ts, borderRows, is3D,
+                    S.face, S.shadow, S.highlight, S.tileBg
+                );
+                emitTile(x, y, ts, gs, getVariantColor(tc, variance), style, sr);
+            }
+            sr++;
+        }
 
-            // Draw top band, then bottom band
-            const bands = [
-                { y: topYs, label: 0 },
-                { y: tbYe,  label: 3 }
-            ];
-            for (const { y: by, label } of bands) {
-                for (let x = 0; x < canvasWidth; x += cs) {
-                    const availW = canvasWidth - x;
+        if (border === 'vietnamese' && borderH >= 12) {
+            const cs = borderH;
+            const priC = S.borderColor;
+            const secC = S.band;
+            const accC = S.borderAccent;
+            const bgC = S.bg;
+            const bands = [{ y: topYs, label: 0 }, { y: tbYe, label: 3 }];
+            for (const band of bands) {
+                for (let x = 0; x < W; x += cs) {
+                    const availW = W - x;
                     if (availW < cs * 0.2) continue;
-                    const motifIdx = Math.floor(x / cs) + label;
-                    svg += getVietnameseMotifSVGString(x, by, Math.min(cs, availW), motifIdx, bgC, priC, secC, accC);
+                    const motifIdx = Math.floor(x / cs) + band.label;
+                    svg += getVietnameseMotifSVGString(x, band.y, Math.min(cs, availW), motifIdx, bgC, priC, secC, accC);
                 }
             }
         }
     } else {
-        let stepX=tileSize,stepY=tileSize;
-        if(style==='circle'||style==='hexagon')stepY=tileSize*0.866; else if(style==='triangle'){stepX=tileSize/2;stepY=tileSize*0.866;} else if(style==='diamond'){stepX=tileSize*0.82;stepY=tileSize/2;}
-        let row=0;
-        for(let y=0;y<canvasHeight;y+=stepY){ let ox=(row%2===1&&(style==='circle'||style==='hexagon'))?(tileSize/2):0; for(let x=0;x<canvasWidth;x+=stepX){ const ax=x+ox;if(ax>canvasWidth)continue; const si=(Math.floor(y)*canvasWidth+Math.floor(ax))*4; let tc=tileBgColor; if(data[si+3]>50){if(is3DMode){const r=data[si],g=data[si+1],b=data[si+2];if(r>g&&r>b)tc=faceColor;else if(g>r&&g>b)tc=shadowColor;else if(b>r&&b>g)tc=highlightColor;else tc=faceColor;}else tc=faceColor;} emitTile(ax,y,tileSize,groutSize,getVariantColor(tc,colorVariance),style,row); } row++; }
+        let stepX = ts, stepY = ts;
+        if (style === 'circle' || style === 'hexagon') stepY = ts * 0.866;
+        else if (style === 'triangle') { stepX = ts / 2; stepY = ts * 0.866; }
+        else if (style === 'diamond') { stepX = ts * 0.82; stepY = ts / 2; }
+
+        let row = 0;
+        for (let y = 0; y < H; y += stepY) {
+            const ox = (row % 2 === 1 && (style === 'circle' || style === 'hexagon')) ? (ts / 2) : 0;
+            for (let x = 0; x < W; x += stepX) {
+                const ax = x + ox;
+                if (ax > W) continue;
+                const si = (Math.floor(y) * W + Math.floor(ax)) * 4;
+                let tc = S.tileBg;
+                if (data[si + 3] > 50) {
+                    if (is3D) {
+                        const r = data[si], g = data[si + 1], b = data[si + 2];
+                        if (r > g && r > b) tc = S.face;
+                        else if (g > r && g > b) tc = S.shadow;
+                        else if (b > r && b > g) tc = S.highlight;
+                        else tc = S.face;
+                    } else {
+                        tc = S.face;
+                    }
+                }
+                emitTile(ax, y, ts, gs, getVariantColor(tc, variance), style, row);
+            }
+            row++;
+        }
     }
+
     svg += `  </g>\n</svg>`;
     return svg;
 }
 
-function exportPNG() {
-    const scale = parseInt(exportScaleSelect.value);
-    const ow = canvas.width, oh = canvas.height;
-    const ots=parseInt(tileSizeInput.value),ogs=parseFloat(groutSizeInput.value),obd=parseFloat(bevelDepthInput.value),ofs=parseFloat(fontScaleInput.value),ols=parseInt(letterSpacingInput.value);
-    const ols_logo = parseFloat(logoScaleInput.value);
-    // Temporarily raise slider max to accommodate scaled values
-    const origMaxW = canvasWidthInput.max, origMaxH = canvasHeightInput.max;
-    canvasWidthInput.max = 20000; canvasHeightInput.max = 20000;
-    tileSizeInput.value=ots*scale;groutSizeInput.value=ogs*scale;bevelDepthInput.value=obd*scale;fontScaleInput.value=ofs*scale;letterSpacingInput.value=ols*scale;canvasWidthInput.value=ow*scale;canvasHeightInput.value=oh*scale;
-    logoScaleInput.value=ols_logo*scale;
-    const otx=textX,oty=textY;textX*=scale;textY*=scale;
-    renderMosaic();
-    const dataURL = canvas.toDataURL('image/png');
-    tileSizeInput.value=ots;groutSizeInput.value=ogs;bevelDepthInput.value=obd;fontScaleInput.value=ofs;letterSpacingInput.value=ols;canvasWidthInput.value=ow;canvasHeightInput.value=oh;
-    logoScaleInput.value=ols_logo;
-    textX=otx;textY=oty;
-    canvasWidthInput.max = origMaxW; canvasHeightInput.max = origMaxH;
-    renderMosaic();
-    const link = document.createElement('a');
-    const isLogo = (contentTypeSelect.value === 'logo');
-    const baseName = isLogo ? 'logo' : (textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'empty');
-    link.download = `mosaic_${baseName}_${scale}x.png`;
-    link.href = dataURL; link.click();
-    showToast(`High-res PNG (${scale}x) exported!`);
+/* ---- app-ui.js ---- */
+/* ============================================================
+   UI: constants, readouts and disabled states
+   ============================================================ */
+const TILE_NUMBER = { square: '01', beveled: '02', circle: '03', hexagon: '04', triangle: '05', diamond: '06' };
+const BORDER_LABELS = {
+    none: 'None', subway: 'NYC subway', greek: 'Greek key',
+    artdeco: 'Art deco', victorian: 'Victorian', vietnamese: 'Encaustic'
+};
+const PANEL_META = {
+    content: { title: 'Type', index: '01 / 04' },
+    tiles: { title: 'Tiles', index: '02 / 04' },
+    palette: { title: 'Colour', index: '03 / 04' },
+    layout: { title: 'Layout', index: '04 / 04' }
+};
+
+const RANGES = {
+    fontScale: [30, 250], letterSpacing: [-20, 40], rotation: [-45, 45],
+    tileSize: [5, 30], grout: [0, 5], bevel: [0, 4], variance: [0, 30],
+    width: [300, 2400], height: [150, 6000], logoScale: [10, 300],
+    textX: [-20000, 20000], textY: [-20000, 20000]
+};
+
+const RANGE_FIELDS = [
+    [fontScaleInput, 'fontScale', '%'],
+    [letterSpacingInput, 'letterSpacing', 'px'],
+    [textRotationInput, 'rotation', '°'],
+    [tileSizeInput, 'tileSize', 'px'],
+    [groutSizeInput, 'grout', 'px'],
+    [bevelDepthInput, 'bevel', 'px'],
+    [colorVarianceInput, 'variance', '%'],
+    [canvasWidthInput, 'width', 'px'],
+    [canvasHeightInput, 'height', 'px'],
+    [logoScaleInput, 'logoScale', '%']
+];
+
+const COLOR_FIELDS = [
+    [bgColorPicker, 'bg'],
+    [tileBgColorPicker, 'tileBg'],
+    [faceColorPicker, 'face'],
+    [shadowColorPicker, 'shadow'],
+    [highlightColorPicker, 'highlight'],
+    [subwayBandColorPicker, 'band'],
+    [subwayBorderColorPicker, 'borderColor'],
+    [subwayHeaderColorPicker, 'borderAccent']
+];
+
+const OUTPUT_SUFFIX = {
+    fontScale: '%', letterSpacing: 'px', rotation: '°', tileSize: 'px', grout: 'px',
+    bevel: 'px', variance: '%', width: 'px', height: 'px', logoScale: '%'
+};
+
+const OUTPUT_IDS = {
+    fontScale: 'val-fontScale',
+    letterSpacing: 'val-letterSpacing',
+    rotation: 'val-textRotation',
+    tileSize: 'val-tileSize',
+    grout: 'val-groutSize',
+    bevel: 'val-bevelDepth',
+    variance: 'val-colorVariance',
+    width: 'val-canvasWidth',
+    height: 'val-canvasHeight',
+    logoScale: 'val-logoScale'
+};
+
+function formatNumber(value, key) {
+    if (key === 'grout' || key === 'bevel') return Number(value).toFixed(1);
+    return String(Math.round(Number(value) * 100) / 100);
 }
 
-function exportSVG() {
-    const svgContent = generateSVGString();
-    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+function updateRangeFill(el) {
+    const min = parseFloat(el.min) || 0;
+    const max = parseFloat(el.max) || 100;
+    const pct = ((parseFloat(el.value) - min) / (max - min)) * 100;
+    el.style.setProperty('--p', `${clamp(pct, 0, 100)}%`);
+}
+
+function setOutput(key, value) {
+    const el = document.getElementById(OUTPUT_IDS[key] || `val-${key}`);
+    if (el) el.textContent = `${value}${OUTPUT_SUFFIX[key] || ''}`;
+    const input = RANGE_FIELDS.find(f => f[1] === key);
+    if (input) {
+        const text = `${value}${OUTPUT_SUFFIX[key] === '%' ? ' percent' : OUTPUT_SUFFIX[key] === '°' ? ' degrees' : OUTPUT_SUFFIX[key] === 'px' ? ' pixels' : ''}`;
+        input[0].setAttribute('aria-valuetext', text);
+    }
+}
+
+function refreshReadouts() {
+    RANGE_FIELDS.forEach(([el, key]) => {
+        if (key === 'height' && state.autoHeight) {
+            const computed = canvas.height || state.height;
+            setOutput(key, computed);
+            el.value = Math.min(computed, parseFloat(el.max) || computed);
+            el.max = Math.max(1500, computed);
+        } else {
+            setOutput(key, formatNumber(state[key], key));
+            if (document.activeElement !== el) el.value = state[key];
+            el.max = el.max || 1500;
+        }
+        updateRangeFill(el);
+    });
+
+    document.getElementById('charCount').textContent = String(state.text.length);
+    textPosReadout.textContent = `${Math.round(state.textX)} , ${Math.round(state.textY)}`;
+
+    COLOR_FIELDS.forEach(([input, key]) => {
+        if (document.activeElement !== input) input.value = state[key];
+        const label = document.getElementById(`lbl-${input.id}`);
+        if (label) label.textContent = String(state[key]).toUpperCase();
+    });
+
+    if (!document.activeElement || document.activeElement !== docNameInput) docNameInput.value = state.docName;
+    document.title = `${state.docName || 'Untitled mosaic'} — Mosaic System`;
+    refreshExportHint();
+}
+
+function refreshChrome() {
+    const is3D = state.tileStyle === 'beveled';
+    [shadowGroup, highlightGroup].forEach(group => {
+        group.classList.toggle('is-disabled', !is3D);
+        group.setAttribute('aria-disabled', String(!is3D));
+        group.title = is3D ? '' : 'Only used by the Beveled tile style';
+    });
+    shadowColorPicker.disabled = !is3D;
+    highlightColorPicker.disabled = !is3D;
+
+    canvasHeightInput.disabled = state.autoHeight;
+    const heightField = canvasHeightInput.closest('.field');
+    if (heightField) heightField.classList.toggle('is-disabled', state.autoHeight);
+
+    borderSettingsGroup.hidden = state.border === 'none';
+    borderMeta.textContent = BORDER_LABELS[state.border] || 'None';
+
+    applyModeVisibility();
+    refreshExportHint();
+}
+
+function applyModeVisibility() {
+    const isLogo = state.mode === 'logo';
+    typographyControls.hidden = isLogo;
+    logoControls.hidden = !isLogo;
+}
+
+function updateTileButtons() {
+    $$('.tile-option', tileStyleGrid).forEach(btn => {
+        const on = btn.dataset.style === state.tileStyle;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-checked', String(on));
+        btn.tabIndex = on ? 0 : -1;
+    });
+    tileStyleNo.textContent = TILE_NUMBER[state.tileStyle] || '01';
+}
+
+function updateBorderButtons() {
+    $$('.border-option', borderPatternGrid).forEach(btn => {
+        const on = btn.dataset.pattern === state.border;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-checked', String(on));
+        btn.tabIndex = on ? 0 : -1;
+    });
+}
+
+function refreshExportHint() {
+    const hint = document.getElementById('exportHint');
+    if (!hint) return;
+    const scale = Number(exportScaleSelect.value) || 1;
+    const W = Math.round((canvas.width || state.width) * scale);
+    const H = Math.round((canvas.height || state.height) * scale);
+    hint.textContent = `PNG ${scale}× → ${W} × ${H}`;
+    hint.classList.toggle('is-warning', W > 16384 || H > 16384 || W * H > 80000000);
+}
+
+function updateCanvasLabel(metrics) {
+    const words = (state.text || '').replace(/\s+/g, ' ').trim();
+    const subject = state.mode === 'logo'
+        ? 'the uploaded logo'
+        : (words ? `the words “${words.slice(0, 60)}”` : 'an empty field');
+    const border = state.border === 'none' ? 'no border' : `${BORDER_LABELS[state.border]} border`;
+    canvas.setAttribute('aria-label',
+        `Mosaic preview of ${subject}: ${metrics.W} by ${metrics.H} pixels, ${metrics.tileCount} tiles, ${border}. ` +
+        `Content offset ${Math.round(state.textX)} right and ${Math.round(state.textY)} down.`);
+}
+
+/* ============================================================
+   Full UI sync (load, undo, presets, reset)
+   ============================================================ */
+function syncUI() {
+    textInput.value = state.text;
+    textFontSelect.value = state.font;
+
+    $$('input[name="contentMode"]').forEach(r => { r.checked = r.value === state.mode; });
+    $$('input[name="textAlign"]').forEach(r => { r.checked = r.value === state.align; });
+
+    tileShadingCheckbox.checked = state.shading;
+    groutNoiseCheckbox.checked = state.noise;
+    autoHeightCheckbox.checked = state.autoHeight;
+    showTextCheckbox.checked = state.showContent;
+
+    RANGE_FIELDS.forEach(([el, key]) => {
+        if (key !== 'height' || !state.autoHeight) el.value = state[key];
+        updateRangeFill(el);
+    });
+
+    COLOR_FIELDS.forEach(([input, key]) => { input.value = state[key]; });
+
+    updateTileButtons();
+    updateBorderButtons();
+    updatePresetActive();
+    refreshReadouts();
+    refreshChrome();
+}
+
+/* ============================================================
+   Change bookkeeping
+   ============================================================ */
+function markChanged() {
+    refreshReadouts();
+    refreshChrome();
+    requestRender();
+    scheduleSave();
+    scheduleCommit();
+}
+
+/* ============================================================
+   History
+   ============================================================ */
+let history = [];
+let historyIndex = -1;
+let commitTimer = null;
+let applyingHistory = false;
+
+function snapshotState() {
+    const { logo, logoName, ...rest } = state;
+    return JSON.stringify(rest);
+}
+
+function commitNow() {
+    window.clearTimeout(commitTimer);
+    commitTimer = null;
+    if (applyingHistory) return;
+    const snap = snapshotState();
+    if (history[historyIndex] === snap) return;
+    history = history.slice(0, historyIndex + 1);
+    history.push(snap);
+    if (history.length > 60) history.shift();
+    historyIndex = history.length - 1;
+    updateHistoryButtons();
+}
+
+function scheduleCommit() {
+    window.clearTimeout(commitTimer);
+    commitTimer = window.setTimeout(commitNow, 450);
+}
+
+function updateHistoryButtons() {
+    undoBtn.disabled = historyIndex <= 0;
+    redoBtn.disabled = historyIndex >= history.length - 1;
+}
+
+function applySnapshot(snap) {
+    let parsed;
+    try { parsed = JSON.parse(snap); } catch { return; }
+    applyingHistory = true;
+    state = sanitize(Object.assign({}, parsed, { logo: state.logo, logoName: state.logoName }));
+    rasterCache = null;
+    syncUI();
+    renderNow();
+    saveNow();
+    applyingHistory = false;
+}
+
+function undo() {
+    commitNow();
+    if (historyIndex <= 0) return;
+    historyIndex--;
+    applySnapshot(history[historyIndex]);
+    updateHistoryButtons();
+    showToast('Undone.');
+}
+
+function redo() {
+    commitNow();
+    if (historyIndex >= history.length - 1) return;
+    historyIndex++;
+    applySnapshot(history[historyIndex]);
+    updateHistoryButtons();
+    showToast('Redone.');
+}
+
+function initHistory() {
+    history = [snapshotState()];
+    historyIndex = 0;
+    updateHistoryButtons();
+}
+
+/* ============================================================
+   Persistence and sharing
+   ============================================================ */
+let saveTimer = null;
+let savedTimer = null;
+
+function scheduleSave() {
+    window.clearTimeout(saveTimer);
+    saveTimer = window.setTimeout(saveNow, 400);
+}
+
+function saveNow() {
+    window.clearTimeout(saveTimer);
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    } catch (err) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.assign({}, state, { logo: null }))); } catch (_) { /* storage full or blocked */ }
+    }
+    docSaved.classList.add('is-visible');
+    window.clearTimeout(savedTimer);
+    savedTimer = window.setTimeout(() => docSaved.classList.remove('is-visible'), 1400);
+}
+
+function loadSaved() {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+}
+
+function bytesToBase64(bytes) {
+    let binary = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
+
+function encodeShareState() {
+    const { logo, logoName, ...rest } = state;
+    const json = JSON.stringify(rest);
+    return bytesToBase64(new TextEncoder().encode(json)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function readShareState() {
+    const match = location.hash.match(/^#s=(.+)$/);
+    if (!match) return null;
+    try {
+        const b64 = match[1].replace(/-/g, '+').replace(/_/g, '/');
+        const json = new TextDecoder().decode(base64ToBytes(b64));
+        return JSON.parse(json);
+    } catch { return null; }
+}
+
+async function copyShareLink() {
+    const url = location.href.split('#')[0] + '#s=' + encodeShareState();
+    try {
+        await navigator.clipboard.writeText(url);
+        showToast('Share link copied — the whole design travels in the URL.');
+    } catch {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch { /* ignore */ }
+        ta.remove();
+        showToast('Share link copied.');
+    }
+}
+
+function sanitize(raw) {
+    const next = Object.assign({}, DEFAULTS);
+    if (!raw || typeof raw !== 'object') return next;
+
+    Object.keys(DEFAULTS).forEach(key => {
+        const fallback = DEFAULTS[key];
+        const value = raw[key];
+        if (key === 'logo') {
+            next.logo = typeof value === 'string' && value.startsWith('data:') ? value : null;
+            return;
+        }
+        if (typeof value !== typeof fallback) return;
+        if (typeof fallback === 'number') {
+            const range = RANGES[key];
+            const num = Number(value);
+            if (!Number.isFinite(num)) return;
+            next[key] = range ? clamp(num, range[0], range[1]) : num;
+        } else {
+            next[key] = value;
+        }
+    });
+
+    if (!['text', 'logo'].includes(next.mode)) next.mode = DEFAULTS.mode;
+    if (!['left', 'center', 'right'].includes(next.align)) next.align = DEFAULTS.align;
+    if (!Object.prototype.hasOwnProperty.call(TILE_NUMBER, next.tileStyle)) next.tileStyle = DEFAULTS.tileStyle;
+    if (!Object.prototype.hasOwnProperty.call(BORDER_LABELS, next.border)) next.border = DEFAULTS.border;
+    if (typeof next.text === 'string') next.text = next.text.slice(0, 2000);
+    if (typeof next.docName !== 'string' || !next.docName.trim()) next.docName = DEFAULTS.docName;
+    next.docName = next.docName.slice(0, 80);
+    next.logoName = typeof raw.logoName === 'string' ? raw.logoName.slice(0, 120) : '';
+    return next;
+}
+
+/* ============================================================
+   Export
+   ============================================================ */
+const MAX_EXPORT_DIM = 16384;
+const MAX_EXPORT_AREA = 80000000;
+
+function planExport(requested) {
+    const probe = measureScene(state, requested);
+    if (probe.W <= MAX_EXPORT_DIM && probe.H <= MAX_EXPORT_DIM && probe.W * probe.H <= MAX_EXPORT_AREA) {
+        return { scale: requested, metrics: probe, clamped: false };
+    }
+    const limit = Math.min(
+        MAX_EXPORT_DIM / probe.W,
+        MAX_EXPORT_DIM / probe.H,
+        Math.sqrt(MAX_EXPORT_AREA / (probe.W * probe.H))
+    );
+    const scale = Math.floor(requested * limit * 10) / 10;
+    if (scale < 1) return { error: 'This artboard is too large to export. Reduce its width or height.' };
+    return { scale, metrics: measureScene(state, scale), clamped: true };
+}
+
+function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    const isLogo = (contentTypeSelect.value === 'logo');
-    const baseName = isLogo ? 'logo' : (textInput.value.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'empty');
-    link.download = `mosaic_${baseName}.svg`;
-    link.href = url; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 100);
-    showToast("SVG Vector exported successfully!");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-// ============================================================
-// INTERACTIVITY: DRAG AND DROP TEXT POSITIONING
-// ============================================================
-function getCanvasCoordinates(e) {
-    const rect = canvas.getBoundingClientRect();
-    return { x: (e.clientX - rect.left) * (canvas.width / rect.width), y: (e.clientY - rect.top) * (canvas.height / rect.height) };
+async function exportPNG() {
+    if (btnExportPNG.disabled) return;
+    const requested = Number(exportScaleSelect.value) || 4;
+    const plan = planExport(requested);
+    if (plan.error) { showToast(plan.error); return; }
+
+    const { scale, clamped } = plan;
+    const label = btnExportPNG.innerHTML;
+    btnExportPNG.disabled = true;
+    btnExportPNG.textContent = 'Exporting…';
+    setBusy(true, `Painting at ${scale}×…`);
+    await nextFrame();
+    await nextFrame();
+
+    try {
+        const out = document.createElement('canvas');
+        const hid = document.createElement('canvas');
+        const oCtx = out.getContext('2d');
+        const hCtx = hid.getContext('2d', { willReadFrequently: true });
+        const metrics = paint(state, scale, out, oCtx, hid, hCtx);
+        const blob = await new Promise((resolve, reject) => {
+            out.toBlob(b => (b ? resolve(b) : reject(new Error('PNG encoding failed'))), 'image/png');
+        });
+        downloadBlob(blob, `${slugify(state.docName)}-${metrics.W}x${metrics.H}.png`);
+        showToast(`Exported ${metrics.W} × ${metrics.H} PNG${clamped ? ` — reduced to ${scale}× to fit browser limits` : ''}.`);
+    } catch (err) {
+        console.error(err);
+        showToast('Export failed — try a smaller artboard or a lower scale.');
+    } finally {
+        btnExportPNG.disabled = false;
+        btnExportPNG.innerHTML = label;
+        setBusy(false);
+    }
 }
-canvas.addEventListener('mousedown', (e) => {
-    const coords = getCanvasCoordinates(e);
-    const pixel = hiddenCtx.getImageData(Math.floor(coords.x), Math.floor(coords.y), 1, 1).data;
-    if (pixel[3] > 50) { isDraggingText = true; canvas.classList.add('dragging'); startDragX = e.clientX; startDragY = e.clientY; textStartOffsetX = textX; textStartOffsetY = textY; }
+
+async function exportSVG() {
+    if (btnExportSVG.disabled) return;
+    renderNow();
+    const estimate = (canvas.width / state.tileSize) * (canvas.height / state.tileSize);
+    if (estimate > 160000) {
+        showToast('Too many tiles for vector export — raise the tile size or shrink the artboard.');
+        return;
+    }
+    const label = btnExportSVG.innerHTML;
+    btnExportSVG.disabled = true;
+    btnExportSVG.textContent = 'Writing…';
+    setBusy(true, 'Writing vector…');
+    await nextFrame();
+    try {
+        const svg = buildSVG();
+        const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+        downloadBlob(blob, `${slugify(state.docName)}-${canvas.width}x${canvas.height}.svg`);
+        showToast(`SVG exported (${Math.round(blob.size / 1024).toLocaleString()} KB).`);
+    } catch (err) {
+        console.error(err);
+        showToast('SVG export failed.');
+    } finally {
+        btnExportSVG.disabled = false;
+        btnExportSVG.innerHTML = label;
+        setBusy(false);
+    }
+}
+
+/* ============================================================
+   Zoom and canvas interaction
+   ============================================================ */
+let zoomMode = 'fit';
+let zoomValue = 1;
+let displayScale = 1;
+
+function fitScale() {
+    const styles = getComputedStyle(canvasScrollArea);
+    const padX = (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+    const padY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+    const availableW = Math.max(80, canvasScrollArea.clientWidth - padX - 4);
+    const availableH = Math.max(80, canvasScrollArea.clientHeight - padY - 4);
+    return clamp(Math.min(availableW / canvas.width, availableH / canvas.height, 1), 0.05, 3);
+}
+
+function applyZoom() {
+    if (zoomMode === 'fit') zoomValue = fitScale();
+    displayScale = zoomValue;
+    canvas.style.width = `${Math.max(1, Math.round(canvas.width * displayScale))}px`;
+    canvas.style.height = `${Math.max(1, Math.round(canvas.height * displayScale))}px`;
+    const label = `${Math.round(displayScale * 100)}%`;
+    if (zoomLabel) zoomLabel.textContent = label;
+    if (zoomFoot) zoomFoot.textContent = label;
+    if (lastMetrics) refreshBounds(lastMetrics.bounds);
+}
+
+function setZoom(mode, value) {
+    zoomMode = mode;
+    if (typeof value === 'number') zoomValue = clamp(value, 0.05, 3);
+    applyZoom();
+}
+
+function stepZoom(direction) {
+    const next = clamp(Math.round((displayScale + direction * 0.1) * 100) / 100, 0.05, 3);
+    setZoom('manual', next);
+}
+
+let boundsEl = null;
+function ensureBoundsEl() {
+    if (boundsEl) return boundsEl;
+    boundsEl = document.createElement('div');
+    boundsEl.className = 'content-bounds';
+    boundsEl.setAttribute('aria-hidden', 'true');
+    boundsEl.innerHTML = '<span>drag</span>';
+    canvasFrame.appendChild(boundsEl);
+    return boundsEl;
+}
+
+function refreshBounds(bounds) {
+    const el = ensureBoundsEl();
+    if (!bounds || bounds.w < 4 || bounds.h < 4 || !state.showContent) {
+        el.hidden = true;
+        return;
+    }
+    el.hidden = false;
+    el.style.left = `${bounds.x * displayScale}px`;
+    el.style.top = `${bounds.y * displayScale}px`;
+    el.style.width = `${bounds.w * displayScale}px`;
+    el.style.height = `${bounds.h * displayScale}px`;
+}
+
+function clampOffset(x, y) {
+    const W = canvas.width || state.width;
+    const H = canvas.height || state.height;
+    return {
+        x: clamp(x, -W * 0.92, W * 0.92),
+        y: clamp(y, -H * 0.62, H * 0.62)
+    };
+}
+
+let dragState = null;
+
+canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    canvas.focus({ preventScroll: true });
+    dragState = { x: e.clientX, y: e.clientY, ox: state.textX, oy: state.textY, rect: canvas.getBoundingClientRect() };
+    canvas.classList.add('is-dragging');
 });
-window.addEventListener('mousemove', (e) => {
-    if (!isDraggingText) {
-        const coords = getCanvasCoordinates(e);
-        if (coords.x >= 0 && coords.x < canvas.width && coords.y >= 0 && coords.y < canvas.height) {
-            const pixel = hiddenCtx.getImageData(Math.floor(coords.x), Math.floor(coords.y), 1, 1).data;
-            canvas.style.cursor = pixel[3] > 50 ? 'move' : 'crosshair';
+
+canvas.addEventListener('pointermove', e => {
+    if (!dragState) return;
+    const rect = dragState.rect;
+    const dx = (e.clientX - dragState.x) * (canvas.width / rect.width);
+    const dy = (e.clientY - dragState.y) * (canvas.height / rect.height);
+    const next = clampOffset(dragState.ox + dx, dragState.oy + dy);
+    state.textX = next.x;
+    state.textY = next.y;
+    refreshReadouts();
+    requestRender();
+});
+
+function endDrag(e) {
+    if (!dragState) return;
+    dragState = null;
+    canvas.classList.remove('is-dragging');
+    if (e && e.pointerId !== undefined && canvas.hasPointerCapture(e.pointerId)) {
+        canvas.releasePointerCapture(e.pointerId);
+    }
+    scheduleCommit();
+    scheduleSave();
+}
+
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+canvas.addEventListener('dblclick', () => {
+    state.textX = 0;
+    state.textY = 0;
+    markChanged();
+    commitNow();
+    showToast('Content recentred.');
+});
+
+canvas.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 10 : 1;
+    const moves = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
+    if (e.key === '0' || e.key === 'Home') {
+        e.preventDefault();
+        state.textX = 0;
+        state.textY = 0;
+        markChanged();
+        return;
+    }
+    const move = moves[e.key];
+    if (!move) return;
+    e.preventDefault();
+    const next = clampOffset(state.textX + move[0], state.textY + move[1]);
+    state.textX = next.x;
+    state.textY = next.y;
+    requestRender();
+    refreshReadouts();
+    scheduleCommit();
+    scheduleSave();
+});
+
+/* ============================================================
+   Panels
+   ============================================================ */
+function setPanel(name, options = {}) {
+    if (!PANEL_META[name]) name = 'content';
+    railButtons.forEach(btn => {
+        const on = btn.dataset.panel === name;
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-selected', String(on));
+        btn.tabIndex = on ? 0 : -1;
+    });
+    panelPanes.forEach(pane => {
+        const on = pane.dataset.pane === name;
+        pane.hidden = !on;
+        pane.classList.toggle('is-active', on);
+    });
+    panelTitle.textContent = PANEL_META[name].title;
+    panelIndex.textContent = PANEL_META[name].index;
+    if (options.persist !== false) {
+        try { localStorage.setItem(PANEL_KEY, name); } catch (_) { /* ignore */ }
+    }
+}
+
+function setPanelOpen(open, options = {}) {
+    workspace.classList.toggle('panel-collapsed', !open);
+    panelCollapse.setAttribute('aria-expanded', String(open));
+    panelCollapse.setAttribute('aria-label', open ? 'Collapse panel' : 'Expand panel');
+    panelCollapse.title = open ? 'Collapse panel' : 'Expand panel';
+    panelReveal.setAttribute('aria-expanded', String(open));
+    if (!open && panel.contains(document.activeElement)) {
+        const activeTab = railButtons.find(btn => btn.classList.contains('is-active'));
+        (window.innerWidth > 960 ? panelReveal : activeTab || panelCollapse).focus();
+    }
+    if (options.persist !== false) {
+        try { localStorage.setItem(`${PANEL_KEY}.open`, open ? '1' : '0'); } catch (_) { /* ignore */ }
+    }
+    if (open) window.setTimeout(applyZoom, 260);
+}
+
+function togglePanel() {
+    setPanelOpen(workspace.classList.contains('panel-collapsed'));
+}
+
+railButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        setPanel(btn.dataset.panel);
+        if (window.innerWidth <= 960 && workspace.classList.contains('panel-collapsed')) setPanelOpen(true);
+    });
+});
+
+document.querySelector('.rail').addEventListener('keydown', e => {
+    const keys = ['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const index = railButtons.indexOf(document.activeElement);
+    if (index === -1) return;
+    e.preventDefault();
+    let next = index;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % railButtons.length;
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (index - 1 + railButtons.length) % railButtons.length;
+    if (e.key === 'Home') next = 0;
+    if (e.key === 'End') next = railButtons.length - 1;
+    railButtons[next].focus();
+    setPanel(railButtons[next].dataset.panel);
+});
+
+panelCollapse.addEventListener('click', togglePanel);
+panelReveal.addEventListener('click', () => setPanelOpen(true));
+
+/* ============================================================
+   Presets
+   ============================================================ */
+let presetRegistry = [];
+
+function loadCustomPresets() {
+    try {
+        const raw = localStorage.getItem(PRESET_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter(p => p && typeof p.name === 'string' && /^#[0-9a-f]{6}$/i.test(p.face || '')) : [];
+    } catch { return []; }
+}
+
+function persistCustomPresets() {
+    try { localStorage.setItem(PRESET_KEY, JSON.stringify(customPresets)); } catch (_) { /* ignore */ }
+}
+
+function paletteOfState() {
+    return {
+        bg: state.bg, tileBg: state.tileBg, face: state.face,
+        shadow: state.shadow, highlight: state.highlight
+    };
+}
+
+function renderPresets() {
+    presetRegistry = BUILTIN_PRESETS.concat(customPresets.map(p => Object.assign({}, p, { custom: true })));
+    const blocks = [];
+    const group = (label, start, end) => {
+        if (start >= end) return;
+        blocks.push(`<div class="preset-group-label">${label}</div>`);
+        for (let i = start; i < end; i++) blocks.push(presetMarkup(presetRegistry[i], i));
+    };
+    group('Classic', 0, Math.min(6, presetRegistry.length));
+    group('Encaustic', 6, Math.min(12, presetRegistry.length));
+    if (presetRegistry.length > 12) group('Saved', 12, presetRegistry.length);
+    palettePresetsGrid.innerHTML = blocks.join('');
+    presetCount.textContent = `${presetRegistry.length} palettes`;
+    updatePresetActive();
+}
+
+function presetMarkup(preset, index) {
+    const name = /[^\x00-\x7F]/.test(preset.name) ? `<span lang="vi">${escapeHtml(preset.name)}</span>` : escapeHtml(preset.name);
+    const swatches = [preset.bg, preset.tileBg, preset.face, preset.shadow, preset.highlight]
+        .map(color => `<span class="preset-color-block" style="background-color:${escapeHtml(color)}"></span>`).join('');
+    const remove = preset.custom
+        ? `<button class="preset-del" type="button" data-remove="${index}" aria-label="Delete palette ${escapeHtml(preset.name)}" title="Delete palette">✕</button>`
+        : '';
+    return `<div class="preset-wrap">
+        <button class="preset" type="button" data-preset="${index}" aria-label="Apply palette ${escapeHtml(preset.name)}">
+            <span class="preset-name">${name}</span>
+            <span class="preset-colors">${swatches}</span>
+        </button>${remove}
+    </div>`;
+}
+
+function applyPreset(preset) {
+    state.bg = preset.bg;
+    state.tileBg = preset.tileBg;
+    state.face = preset.face;
+    state.shadow = preset.shadow;
+    state.highlight = preset.highlight;
+    rasterCache = null;
+    syncUI();
+    renderNow();
+    saveNow();
+    commitNow();
+    showToast(`Palette “${preset.name}” applied.`);
+}
+
+function updatePresetActive() {
+    $$('.preset', palettePresetsGrid).forEach(btn => {
+        const preset = presetRegistry[Number(btn.dataset.preset)];
+        if (!preset) return;
+        const on = ['bg', 'tileBg', 'face', 'shadow', 'highlight'].every(key => preset[key].toLowerCase() === String(state[key]).toLowerCase());
+        btn.classList.toggle('is-active', on);
+        btn.setAttribute('aria-pressed', String(on));
+    });
+}
+
+palettePresetsGrid.addEventListener('click', e => {
+    const removeBtn = e.target.closest('[data-remove]');
+    if (removeBtn) {
+        const index = Number(removeBtn.dataset.remove);
+        const preset = presetRegistry[index];
+        if (preset && preset.custom) {
+            const customIndex = index - BUILTIN_PRESETS.length;
+            customPresets.splice(customIndex, 1);
+            persistCustomPresets();
+            renderPresets();
+            showToast('Saved palette deleted.');
         }
         return;
     }
-    const rect = canvas.getBoundingClientRect();
-    textX = textStartOffsetX + (e.clientX - startDragX) * (canvas.width / rect.width);
-    textY = textStartOffsetY + (e.clientY - startDragY) * (canvas.height / rect.height);
-    renderMosaic();
-});
-window.addEventListener('mouseup', () => { if (isDraggingText) { isDraggingText = false; canvas.classList.remove('dragging'); } });
-
-// ============================================================
-// UI INITIALIZATION & SYNC
-// ============================================================
-function initPalettes() {
-    palettePresetsGrid.innerHTML = '';
-    presets.forEach(preset => {
-        const btn = document.createElement('button'); btn.className = 'preset-btn'; btn.title = `Apply ${preset.name}`;
-        btn.innerHTML = `<div class="preset-name">${preset.name}</div><div class="preset-colors"><div class="preset-color-block" style="background-color: ${preset.bg}"></div><div class="preset-color-block" style="background-color: ${preset.tileBg}"></div><div class="preset-color-block" style="background-color: ${preset.face}"></div><div class="preset-color-block" style="background-color: ${preset.shadow}"></div><div class="preset-color-block" style="background-color: ${preset.highlight}"></div></div>`;
-        btn.addEventListener('click', () => { bgColorPicker.value=preset.bg;tileBgColorPicker.value=preset.tileBg;faceColorPicker.value=preset.face;shadowColorPicker.value=preset.shadow;highlightColorPicker.value=preset.highlight;syncColorLabels();renderMosaic();showToast(`Preset "${preset.name}" applied!`); });
-        palettePresetsGrid.appendChild(btn);
-    });
-}
-
-function syncColorLabels() {
-    document.getElementById('lbl-bgColor').textContent = bgColorPicker.value.toUpperCase();
-    document.getElementById('lbl-tileBgColor').textContent = tileBgColorPicker.value.toUpperCase();
-    document.getElementById('lbl-faceColor').textContent = faceColorPicker.value.toUpperCase();
-    document.getElementById('lbl-shadowColor').textContent = shadowColorPicker.value.toUpperCase();
-    document.getElementById('lbl-highlightColor').textContent = highlightColorPicker.value.toUpperCase();
-    document.getElementById('lbl-subwayBandColor').textContent = subwayBandColorPicker.value.toUpperCase();
-    document.getElementById('lbl-subwayBorderColor').textContent = subwayBorderColorPicker.value.toUpperCase();
-    document.getElementById('lbl-subwayHeaderColor').textContent = subwayHeaderColorPicker.value.toUpperCase();
-}
-
-function updateNumericFeedback(id, suffix = '') {
-    const input = document.getElementById(id), feedback = document.getElementById(`val-${id}`);
-    if (input && feedback) feedback.textContent = `${input.value}${suffix}`;
-}
-
-function syncAllSliderDisplays() {
-    updateNumericFeedback('fontScale', '%'); updateNumericFeedback('letterSpacing', 'px'); updateNumericFeedback('textRotation', '\u00b0');
-    updateNumericFeedback('tileSize', 'px'); updateNumericFeedback('groutSize', 'px'); updateNumericFeedback('bevelDepth', 'px'); updateNumericFeedback('colorVariance', '%');
-    updateNumericFeedback('canvasWidth', 'px'); updateNumericFeedback('canvasHeight', 'px'); updateNumericFeedback('logoScale', '%');
-}
-
-const triggers = [
-    textInput, textFontSelect, fontScaleInput, letterSpacingInput, textRotationInput,
-    tileStyleSelect, tileSizeInput, groutSizeInput, bevelDepthInput,
-    bgColorPicker, tileBgColorPicker, faceColorPicker, shadowColorPicker, highlightColorPicker,
-    colorVarianceInput, groutNoiseCheckbox, tileShadingCheckbox,
-    canvasWidthInput, canvasHeightInput, autoHeightCheckbox,
-    borderPatternSelect, subwayBandColorPicker, subwayBorderColorPicker, subwayHeaderColorPicker,
-    showTextCheckbox, contentTypeSelect, logoScaleInput
-];
-triggers.forEach(el => { el.addEventListener('input', () => {
-    syncColorLabels(); syncAllSliderDisplays(); renderMosaic();
-    // Update ARIA attributes for range inputs
-    document.querySelectorAll('input[type="range"]').forEach(r => { r.setAttribute('aria-valuenow', r.value); });
-}); });
-
-btnToggleSidebar.addEventListener('click', () => {
-    if (sidebar.style.display === 'none') { sidebar.style.display = 'flex'; btnToggleSidebar.style.transform = 'rotate(0deg)'; }
-    else { sidebar.style.display = 'none'; btnToggleSidebar.style.transform = 'rotate(180deg)'; }
+    const btn = e.target.closest('[data-preset]');
+    if (!btn) return;
+    const preset = presetRegistry[Number(btn.dataset.preset)];
+    if (preset) applyPreset(preset);
 });
 
-btnExportPNG.addEventListener('click', exportPNG);
-btnExportSVG.addEventListener('click', exportSVG);
-
-// Accordion section toggle
-document.querySelectorAll('.section-title').forEach(title => {
-    title.addEventListener('click', () => {
-        const section = title.closest('.control-section');
-        section.classList.toggle('collapsed');
-    });
+savePresetBtn.addEventListener('click', () => {
+    const name = `Custom ${customPresets.length + 1}`;
+    customPresets.push(Object.assign({ name }, paletteOfState()));
+    persistCustomPresets();
+    renderPresets();
+    showToast(`Saved “${name}” to this browser.`);
 });
 
-// Content type switching
-contentTypeSelect.addEventListener('change', () => {
-    const isLogo = contentTypeSelect.value === 'logo';
-    typographyControls.style.display = isLogo ? 'none' : 'block';
-    logoControls.style.display = isLogo ? 'block' : 'none';
-    renderMosaic();
+function hslToHex(h, s, l) {
+    h = ((h % 360) + 360) % 360;
+    s = clamp(s, 0, 100) / 100;
+    l = clamp(l, 0, 100) / 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; }
+    else if (h < 120) { r = x; g = c; }
+    else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; }
+    else if (h < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+    const to = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+randomizePaletteBtn.addEventListener('click', () => {
+    const h = Math.floor(rng() * 360);
+    const scheme = Math.floor(rng() * 3);
+    const h2 = h + (scheme === 0 ? 172 : scheme === 1 ? 118 : 34);
+    const h3 = h + (scheme === 0 ? 188 : scheme === 1 ? 238 : 322);
+    state.bg = hslToHex(h, 10 + rng() * 12, 92 + rng() * 4);
+    state.tileBg = hslToHex(h, 8 + rng() * 10, 78 + rng() * 7);
+    state.face = hslToHex(h, 26 + rng() * 32, 16 + rng() * 14);
+    state.shadow = hslToHex(h2, 34 + rng() * 30, 44 + rng() * 16);
+    state.highlight = hslToHex(h3, 28 + rng() * 34, 74 + rng() * 10);
+    rasterCache = null;
+    syncUI();
+    renderNow();
+    saveNow();
+    commitNow();
+    showToast('A fresh palette, fired at random.');
 });
 
-// File upload listener
-logoInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    logoFileNameSpan.textContent = file.name;
-    const reader = new FileReader();
-    reader.onload = (event) => {
+/* ============================================================
+   Logo loading
+   ============================================================ */
+function defaultLogoDataUrl() {
+    return `data:image/svg+xml;base64,${bytesToBase64(new TextEncoder().encode(defaultLogoSVG))}`;
+}
+
+function loadLogoImage(dataUrl, name) {
+    return new Promise(resolve => {
         const img = new Image();
         img.onload = () => {
             loadedLogoImage = img;
             createLogoMasks(img);
-            renderMosaic();
+            rasterCache = null;
+            logoFileNameSpan.textContent = name || 'Default mark';
+            requestRender();
+            resolve(true);
         };
-        img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-});
-
-// Default SVG logo loader
-function loadDefaultLogo() {
-    const img = new Image();
-    img.onload = () => {
-        loadedLogoImage = img;
-        createLogoMasks(img);
-        renderMosaic();
-    };
-    img.src = 'data:image/svg+xml;base64,' + btoa(defaultLogoSVG);
+        img.onerror = () => {
+            showToast('That file could not be read — try a PNG, SVG or JPG.');
+            resolve(false);
+        };
+        img.src = dataUrl;
+    });
 }
 
-initPalettes(); syncColorLabels(); syncAllSliderDisplays(); loadDefaultLogo();
+function handleLogoFile(file) {
+    if (!file) return;
+    if (!/^image\/(png|svg\+xml|jpeg|jpg)$/.test(file.type)) {
+        showToast('Unsupported file — use PNG, SVG or JPG.');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = async event => {
+        const dataUrl = String(event.target.result);
+        const ok = await loadLogoImage(dataUrl, file.name);
+        if (!ok) return;
+        state.logo = dataUrl;
+        state.logoName = file.name;
+        state.mode = 'logo';
+        syncUI();
+        renderNow();
+        saveNow();
+        commitNow();
+        showToast(`Logo “${file.name}” loaded.`);
+    };
+    reader.onerror = () => showToast('Could not read that file.');
+    reader.readAsDataURL(file);
+}
 
-// ARIA: link numeric displays to sliders
-document.querySelectorAll('input[type="range"]').forEach(r => {
-    const feedback = document.getElementById('val-' + r.id);
-    if (feedback) { r.setAttribute('aria-describedby', feedback.id); }
+document.getElementById('logoBrowse').addEventListener('click', e => {
+    e.stopPropagation();
+    logoInput.click();
 });
+
+logoDrop.addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    logoInput.click();
+});
+
+logoInput.addEventListener('change', e => handleLogoFile(e.target.files[0]));
+
+['dragenter', 'dragover'].forEach(type => {
+    logoDrop.addEventListener(type, e => {
+        e.preventDefault();
+        logoDrop.classList.add('is-over');
+    });
+});
+['dragleave', 'dragend'].forEach(type => {
+    logoDrop.addEventListener(type, () => logoDrop.classList.remove('is-over'));
+});
+logoDrop.addEventListener('drop', e => {
+    e.preventDefault();
+    logoDrop.classList.remove('is-over');
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handleLogoFile(file);
+});
+
+/* ============================================================
+   Input wiring
+   ============================================================ */
+RANGE_FIELDS.forEach(([el, key]) => {
+    el.addEventListener('input', () => {
+        state[key] = parseFloat(el.value);
+        if (key === 'tileBg') noiseCache.key = null;
+        updateRangeFill(el);
+        markChanged();
+    });
+});
+
+textInput.addEventListener('input', () => {
+    state.text = textInput.value;
+    markChanged();
+});
+
+textFontSelect.addEventListener('change', () => {
+    state.font = textFontSelect.value;
+    markChanged();
+    ensureFont();
+});
+
+$$('input[name="contentMode"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        state.mode = radio.value;
+        applyModeVisibility();
+        markChanged();
+        commitNow();
+        if (state.mode === 'logo' && !loadedLogoImage) loadLogoImage(defaultLogoDataUrl(), '');
+    });
+});
+
+$$('input[name="textAlign"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        if (!radio.checked) return;
+        state.align = radio.value;
+        markChanged();
+    });
+});
+
+tileStyleGrid.addEventListener('click', e => {
+    const btn = e.target.closest('.tile-option');
+    if (!btn) return;
+    state.tileStyle = btn.dataset.style;
+    updateTileButtons();
+    markChanged();
+    commitNow();
+});
+
+borderPatternGrid.addEventListener('click', e => {
+    const btn = e.target.closest('.border-option');
+    if (!btn) return;
+    state.border = btn.dataset.pattern;
+    updateBorderButtons();
+    refreshChrome();
+    markChanged();
+    commitNow();
+});
+
+function arrowNavGroup(container, selector) {
+    container.addEventListener('keydown', e => {
+        if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.key)) return;
+        const buttons = $$(selector, container);
+        const index = buttons.indexOf(document.activeElement);
+        if (index === -1) return;
+        e.preventDefault();
+        const step = (e.key === 'ArrowDown' || e.key === 'ArrowRight') ? 1 : -1;
+        const next = buttons[(index + step + buttons.length) % buttons.length];
+        next.focus();
+        next.click();
+    });
+}
+arrowNavGroup(tileStyleGrid, '.tile-option');
+arrowNavGroup(borderPatternGrid, '.border-option');
+
+COLOR_FIELDS.forEach(([input, key]) => {
+    input.addEventListener('input', () => {
+        state[key] = input.value;
+        if (key === 'tileBg') noiseCache.key = null;
+        if (key === 'band' || key === 'borderColor' || key === 'borderAccent') rasterCache = null;
+        markChanged();
+    });
+});
+
+tileShadingCheckbox.addEventListener('change', () => {
+    state.shading = tileShadingCheckbox.checked;
+    markChanged();
+});
+
+groutNoiseCheckbox.addEventListener('change', () => {
+    state.noise = groutNoiseCheckbox.checked;
+    markChanged();
+});
+
+autoHeightCheckbox.addEventListener('change', () => {
+    state.autoHeight = autoHeightCheckbox.checked;
+    if (!state.autoHeight) {
+        state.height = canvas.height || state.height;
+        canvasHeightInput.max = Math.max(1500, state.height);
+    }
+    syncUI();
+    markChanged();
+    commitNow();
+});
+
+showTextCheckbox.addEventListener('change', () => {
+    state.showContent = showTextCheckbox.checked;
+    markChanged();
+});
+
+sizePresets.addEventListener('click', e => {
+    const chip = e.target.closest('.chip');
+    if (!chip) return;
+    state.width = Number(chip.dataset.w);
+    state.height = Number(chip.dataset.h);
+    state.autoHeight = chip.dataset.auto === 'true';
+    $$('.chip', sizePresets).forEach(c => c.classList.toggle('is-active', c === chip));
+    syncUI();
+    renderNow();
+    saveNow();
+    commitNow();
+    showToast(`Format set to ${chip.textContent.trim()}.`);
+});
+
+document.getElementById('resetTextPos').addEventListener('click', () => {
+    state.textX = 0;
+    state.textY = 0;
+    markChanged();
+    commitNow();
+    showToast('Content recentred.');
+});
+
+undoBtn.addEventListener('click', undo);
+redoBtn.addEventListener('click', redo);
+
+resetBtn.addEventListener('click', () => {
+    const docName = state.docName;
+    state = Object.assign({}, DEFAULTS, { docName });
+    loadedLogoImage = null;
+    rasterCache = null;
+    syncUI();
+    loadLogoImage(defaultLogoDataUrl(), '');
+    renderNow();
+    saveNow();
+    commitNow();
+    showToast('Studio reset — press Ctrl/⌘ Z to undo.');
+});
+
+docNameInput.addEventListener('input', () => {
+    state.docName = docNameInput.value.slice(0, 80) || 'Untitled mosaic';
+    document.title = `${state.docName} — Mosaic System`;
+    scheduleSave();
+    scheduleCommit();
+});
+docNameInput.addEventListener('blur', () => {
+    if (!docNameInput.value.trim()) {
+        state.docName = 'Untitled mosaic';
+        docNameInput.value = state.docName;
+    }
+    commitNow();
+});
+
+exportScaleSelect.addEventListener('change', refreshExportHint);
+
+btnExportPNG.addEventListener('click', exportPNG);
+btnExportSVG.addEventListener('click', exportSVG);
+
+zoomInBtn.addEventListener('click', () => stepZoom(1));
+zoomOutBtn.addEventListener('click', () => stepZoom(-1));
+zoomFitBtn.addEventListener('click', () => { setZoom('fit', 1); showToast('Zoomed to fit.'); });
+
+copyLinkBtn.addEventListener('click', copyShareLink);
+
+aboutBtn.addEventListener('click', () => {
+    if (typeof aboutDialog.showModal === 'function') aboutDialog.showModal();
+    else aboutDialog.setAttribute('open', '');
+});
+aboutClose.addEventListener('click', () => aboutDialog.close());
+aboutDialog.addEventListener('click', e => {
+    if (e.target === aboutDialog) aboutDialog.close();
+});
+
+canvas.addEventListener('pointerenter', applyZoom);
+canvasScrollArea.addEventListener('scroll', () => { if (lastMetrics) refreshBounds(lastMetrics.bounds); }, { passive: true });
+
+document.querySelector('.stage').addEventListener('transitionend', applyZoom);
+
+/* Keyboard shortcuts */
+document.addEventListener('keydown', e => {
+    const target = e.target;
+    const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+    const meta = e.ctrlKey || e.metaKey;
+    if (meta && !typing && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+    } else if (meta && !typing && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
+    } else if (e.key === 'Escape' && window.innerWidth <= 960 && !workspace.classList.contains('panel-collapsed') && !aboutDialog.open) {
+        setPanelOpen(false);
+    }
+});
+
+/* Fonts */
+let fontLoadTimer = null;
+function ensureFont() {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    const spec = `${fontWeightFor(state.font)} 100px ${state.font}`;
+    return document.fonts.load(spec, state.text || 'Aa').catch(() => {}).then(() => {
+        rasterCache = null;
+        requestRender();
+    });
+}
+if (document.fonts) {
+    document.fonts.addEventListener('loadingdone', () => {
+        window.clearTimeout(fontLoadTimer);
+        fontLoadTimer = window.setTimeout(() => { rasterCache = null; requestRender(); }, 60);
+    });
+}
+
+/* Resize */
+let resizeTimer = null;
+let lastNarrow = window.innerWidth <= 960;
+window.addEventListener('resize', () => {
+    const narrow = window.innerWidth <= 960;
+    if (narrow !== lastNarrow) {
+        lastNarrow = narrow;
+        // Crossing into the drawer layout should not leave the panel covering the stage.
+        if (narrow) setPanelOpen(false, { persist: false });
+    }
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+        if (zoomMode === 'fit') applyZoom();
+        if (lastMetrics) refreshBounds(lastMetrics.bounds);
+    }, 120);
+});
+
+/* ============================================================
+   Boot
+   ============================================================ */
+function init() {
+    customPresets = loadCustomPresets();
+    const shared = readShareState();
+    const saved = loadSaved();
+    state = sanitize(shared || saved || DEFAULTS);
+
+    renderPresets();
+    syncUI();
+    setPanel(localStorage.getItem(PANEL_KEY) || 'content', { persist: false });
+
+    const storedOpen = localStorage.getItem(`${PANEL_KEY}.open`);
+    const narrow = window.innerWidth <= 960;
+    setPanelOpen(storedOpen === null ? !narrow : storedOpen === '1', { persist: false });
+
+    initHistory();
+    renderNow();
+    setZoom('fit', 1);
+
+    const logoUrl = state.logo || defaultLogoDataUrl();
+    loadLogoImage(logoUrl, state.logoName || '');
+
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => { rasterCache = null; renderNow(); });
+    }
+
+    if (shared) showToast('Shared settings loaded from the link.');
+    else if (saved) showToast('Restored your last session.');
+}
+
+init();
